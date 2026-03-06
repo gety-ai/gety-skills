@@ -1,56 +1,79 @@
 ---
 name: gety-cli
-description: Search and retrieve local documents via Gety CLI for use as context. Use when the current task needs information from user's local files, documents, or knowledge base. Actions: search files, find documents, retrieve content, lookup notes, query local knowledge, read document, fetch file content, get doc details, list data sources, manage connectors. Objects: local files, documents, meeting notes, PDF, Markdown, knowledge base, connectors, folders, local docs. Triggers: "search my files", "find in my docs", "what do my documents say about", "check my local notes", "look up in my files", "gety search", "gety doc", "local knowledge retrieval", "search local documents".
+description: Search and retrieve local documents via Gety CLI. Use when the user needs information from their local files, documents, or knowledge base.
 ---
+
+## Usage
+
+```
+/gety-cli <natural language query>
+```
+
+### Examples
+
+```
+/gety-cli What docx files have I updated in the last 24 hours?
+/gety-cli Find meeting notes about the Q1 roadmap
+/gety-cli Search for PDF documents related to security review in my Work folder
+/gety-cli What's in my notes about the design system?
+/gety-cli Show me the latest documents I've worked on
+/gety-cli What data sources do I have connected?
+/gety-cli Add ~/Documents/projects as a data source
+```
 
 ## Workflow
 
 ```
-- [ ] Step 1: Verify gety availability ⛔ BLOCKING
-- [ ] Step 2: Plan search strategy
-- [ ] Step 3: Search documents
+- [ ] Step 1: Verify gety and discover data sources ⛔ BLOCKING
+- [ ] Step 2: Translate query to gety command(s)
+- [ ] Step 3: Execute and iterate
 - [ ] Step 4: Read specific documents (conditional)
 - [ ] Step 5: Synthesize findings ⚠️ REQUIRED
 ```
 
-### Step 1: Verify gety availability ⛔ BLOCKING
+### Step 1: Verify gety and discover data sources ⛔ BLOCKING
 
-Run `gety --help`.
+Run `gety connector list`.
 
-- Has output → proceed
+- Has output → proceed. Keep the returned connector names for use as `-c` filter values in later steps.
 - Command not found → tell user to install Gety CLI from the Gety desktop app settings. Do NOT attempt any gety commands.
+- No connectors → tell user to add data sources first (via Gety desktop app or `gety connector add <path>`).
 
-### Step 2: Plan search strategy
+### Step 2: Translate query to gety command(s)
 
-Ask yourself:
-- What specific information does the task need?
-- Should I filter by data source, file type, or time range?
-- Is this a broad exploration or a targeted lookup?
+Parse the user's natural language query and map it to gety CLI flags:
 
-If scope is unclear, run `gety connector list` to see available data sources.
+| User intent | Maps to |
+|-------------|---------|
+| File type ("docx files", "PDFs") | `-e <ext>` |
+| Data source ("from Work folder", "in my notes") | `-c "<connector_name>"` |
+| Time range ("last 24 hours", "this week") | `--update-time-from` / `--update-time-to` (ISO 8601) |
+| Recency ("recent", "latest") | `--sort-by update_time --sort-order descending` |
+| Topic or keyword | `<query>` string |
+| Title search ("named X", "titled X") | `--match-scope title` |
+| List data sources | → `gety connector list` |
+| Add data source | → `gety connector add <path>` |
+| Remove data source | → `gety connector remove <id>` ⚠️ confirm with user first |
 
-### Step 3: Search documents
+**Time calculations**: When the query mentions relative time ("last 24 hours", "this week"), compute the ISO 8601 timestamp from the current date/time.
 
-```bash
-gety search "<query>" [options]
-```
+#### Translation examples
 
-Key options (load `references/cli-capabilities.md` for full reference):
-- `-n <limit>` — max results (default: 10)
-- `--offset <n>` — pagination
-- `-c "<connector_name>"` — filter by data source (repeatable / comma-separated)
-- `-e <ext>` — filter by file type (e.g., `pdf,docx`)
-- `--sort-by update_time --sort-order descending` — when recency matters
-- `--update-time-from` / `--update-time-to` — ISO 8601 time range
-- `--match-scope <title|content|semantic>` — match type filter
-- `--json` — structured output for scripting and CLI pipelines (e.g., piping to `jq`)
+| Query | Command |
+|-------|---------|
+| "What docx files have I updated in the last 24 hours?" | `gety search "" -e docx --sort-by update_time --sort-order descending --update-time-from <24h ago>` |
+| "Find meeting notes about Q1 roadmap" | `gety search "Q1 roadmap meeting notes"` |
+| "PDFs about security in my Work folder" | `gety search "security" -c "Folder: Work" -e pdf` |
+| "What data sources do I have?" | `gety connector list` |
 
-Search strategy:
-- Start with a focused query matching the user's intent
-- Too many irrelevant results → add `-c` or `-e` filters
+### Step 3: Execute and iterate
+
+Run the translated command. If results aren't satisfactory:
+
+- Too many irrelevant results → add filters (`-c`, `-e`, `--match-scope`)
 - Too few results → broaden query, try synonyms, remove filters
-- Time-sensitive queries → sort by `update_time` descending
 - Need more results → paginate with `--offset`
+- Need structured data for further processing → add `--json` and pipe to `jq`
 
 ### Step 4: Read specific documents (conditional)
 
@@ -61,35 +84,22 @@ gety doc <connector_id> <doc_id>
 ```
 
 - Extract `connector_id` and `doc_id` from search results
-- Ask: "Does reading this document add information I don't already have?"
-- For large result sets, read the top 3-5 most relevant first — don't read everything
+- Only read documents that add information you don't already have
+- For large result sets, read the top 3-5 most relevant first
 
 ### Step 5: Synthesize findings ⚠️ REQUIRED
 
 - Combine information from multiple documents into a coherent answer
-- Cite source documents (name or path) so the user knows where the information came from
+- Cite source documents (name or path) so the user knows where info came from
 - If no relevant results found, say so clearly and suggest alternative search terms
 - NEVER paste raw gety output — always synthesize into natural language
 
-## Connector Management
-
-When user asks to manage data sources:
-
-```bash
-gety connector list
-gety connector add <path> [--name "<name>"]
-gety connector remove <connector_id>
-```
-
-⚠️ Confirm with user before `connector remove` — this is destructive.
-
 ## Anti-Patterns
 
-- ❌ Dumping raw gety output to the user without synthesis
+- ❌ Dumping raw gety output without synthesis
 - ❌ Reading every document from search results — only read what's needed
 - ❌ Single search attempt then giving up — try alternative queries and filters
 - ❌ Using commands outside the CLI surface (`search`, `doc`, `connector` only)
-- ❌ Ignoring filters when the user's intent is specific to a source or file type
 - ❌ Asking the user to run gety commands manually — run them directly
 
 ## Reference
