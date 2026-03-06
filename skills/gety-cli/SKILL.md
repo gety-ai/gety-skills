@@ -1,6 +1,7 @@
 ---
 name: gety-cli
 description: Search and retrieve local documents via Gety CLI. Use when the user needs information from their local files, documents, or knowledge base.
+argument-hint: <natural language query>
 ---
 
 ## Usage
