@@ -23,7 +23,7 @@ Search and retrieve local documents via Gety CLI — connect your AI coding agen
 ## Installation
 
 ```bash
-npx skills add gety-ai/gety-skills --path skills/gety-cli
+npx skills add gety-ai/gety-skills --skills gety-cli
 ```
 
 ## Requirements

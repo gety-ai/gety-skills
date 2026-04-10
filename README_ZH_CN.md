@@ -10,12 +10,12 @@
 
 | Skill | 描述 | 安装 |
 |------|------|------|
-| [gety-cli](skills/gety-cli/README.md) | 通过 Gety CLI 搜索和检索本地文档 | `npx skills add gety-ai/gety-skills --path skills/gety-cli` |
+| [gety-cli](skills/gety-cli/README.md) | 通过 Gety CLI 搜索和检索本地文档 | `npx skills add gety-ai/gety-skills --skills gety-cli` |
 
 ## 快速开始
 
 ```bash
-npx skills add gety-ai/gety-skills --path skills/<skill-name>
+npx skills add gety-ai/gety-skills
 ```
 
 ## 前置要求

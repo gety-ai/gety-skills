@@ -12,12 +12,12 @@ Agent skills for [Gety](https://gety.ai) — connect AI agents to your local doc
 
 | Skill | Description | Install |
 |-------|-------------|---------|
-| [gety-cli](skills/gety-cli/README.md) | Search and retrieve local documents via Gety CLI | `npx skills add gety-ai/gety-skills --path skills/gety-cli` |
+| [gety-cli](skills/gety-cli/README.md) | Search and retrieve local documents via Gety CLI | `npx skills add gety-ai/gety-skills --skills skills/gety-cli` |
 
 ## Quick Start
 
 ```bash
-npx skills add gety-ai/gety-skills --path skills/<skill-name>
+npx skills add gety-ai/gety-skills
 ```
 
 
@@ -25,4 +25,3 @@ npx skills add gety-ai/gety-skills --path skills/<skill-name>
 
 - [Gety](https://gety.ai) desktop app installed and running
 - Enable AI integrations in [Gety](https://gety.ai) desktop app settings.
-
