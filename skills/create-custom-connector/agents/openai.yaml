@@ -1,0 +1,4 @@
+interface:
+  display_name: "Create Custom Connector"
+  short_description: "Build Gety custom connectors"
+  default_prompt: "Use $create-custom-connector to clone the Gety sample connector and build a working, validated custom connector for my source."

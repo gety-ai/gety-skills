@@ -3,7 +3,7 @@
 Agent skills for [Gety](https://gety.ai) — connect AI agents to your local documents.
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Skills-1-blue" alt="1 Skills" />
+  <img src="https://img.shields.io/badge/Skills-2-blue" alt="2 Skills" />
 </p>
 
 [中文说明](README_ZH_CN.md)
@@ -12,7 +12,8 @@ Agent skills for [Gety](https://gety.ai) — connect AI agents to your local doc
 
 | Skill | Description | Install |
 |-------|-------------|---------|
-| [gety-cli](skills/gety-cli/README.md) | Search and retrieve local documents via Gety CLI | `npx skills add gety-ai/gety-skills --skills skills/gety-cli` |
+| [create-custom-connector](skills/create-custom-connector/SKILL.md) | Build a custom connector to index any API, SaaS, database, or local source into Gety | `npx skills add gety-ai/gety-skills --skills create-custom-connector` |
+| [gety-cli](skills/gety-cli/README.md) | Search and retrieve local documents via Gety CLI | `npx skills add gety-ai/gety-skills --skills gety-cli` |
 
 ## Quick Start
 
