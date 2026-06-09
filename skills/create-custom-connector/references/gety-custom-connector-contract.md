@@ -18,6 +18,8 @@ Start by cloning the sample repository:
 
 ```bash
 git clone https://github.com/gety-ai/gety-sample-connector <connector-folder>
+# Prefer SSH (and have GitHub SSH keys set up)? Use this instead:
+# git clone git@github.com:gety-ai/gety-sample-connector.git <connector-folder>
 ```
 
 Use only a clone or fork of `gety-sample-connector` for new connector work. Do not hand-create a connector skeleton, because the sample contains the build, generated config type, local runner, and verification wiring expected by this skill.
@@ -36,7 +38,7 @@ dev/runner.ts
 scripts/build.ts
 ```
 
-`manifest.json.entry` should point to the committed build artifact, usually `dist/main.js`. Gety loads the entry from the installed folder on every poll, so source edits require rebuild plus Restart in Gety. Manifest edits require reinstall because Gety reads the manifest only at install time.
+`manifest.json.entry` should point to the committed build artifact, usually `dist/main.js`. Gety loads the entry from the installed folder on every poll, so source edits require rebuild plus Restart in Gety. Any change to `manifest.json` (including adding an `icon`) requires uninstalling and reinstalling the connector in Gety, because Gety reads the manifest only at install time.
 
 ## Manifest Rules
 
@@ -70,12 +72,15 @@ Rules:
 
 - `id` must match `^[a-z0-9][a-z0-9_-]*$`: start with a lowercase letter or digit, then lowercase letters, digits, `_`, or `-` (no leading `_`/`-`, no uppercase, no dots). Prefer stable service names such as `linear` or `github`.
 - `version` and `min_app_version` are SemVer. Use the sample's current `min_app_version` unless the connector needs a newer Gety contract.
-- `entry` and `icon` must be relative paths inside the connector root.
+- `entry` and `icon` must be relative paths inside the connector root. `icon` is optional (a PNG or SVG in the connector root) and is shown in Gety's connector list and install dialog.
 - `schedule.interval` is seconds; values below 60 are clamped. Omit the field for Gety's default or set a service-appropriate interval.
 - `config.fields[].type` can be `text`, `password`, `number`, `checkbox`, `dropdown`, or `directory`.
 - Dropdown fields require ordered `options: [{ "value": "...", "label": "..." }]`.
 - Unknown fields are rejected. `permissions`, `mode`, dynamic hooks, and per-doc links are not supported; do not add them.
-- `schema.extra_indexed_fields` adds extra indexed metadata fields. Each entry needs both `field` and `strategy`, for example `"schema": { "extra_indexed_fields": [{ "field": "status", "strategy": "fast_text" }] }`. `strategy` is one of `fast_text`, `full_text`, or `semantic`.
+- `schema.extra_indexed_fields` makes extra `metadata` keys searchable (Gety already indexes `title` and `content`). Each entry needs both `field` and `strategy`, e.g. `"schema": { "extra_indexed_fields": [{ "field": "status", "strategy": "fast_text" }] }`. Choose `strategy` by how the field should match:
+  - `fast_text` — in-memory index for fast exact / substring / fuzzy (and pinyin) matching on short values. Best for titles, names, tags, folders, statuses, and similar short metadata.
+  - `full_text` — SQLite FTS5 keyword search with BM25 ranking and tokenization. Best for longer text where ranked keyword search matters.
+  - `semantic` — embeds the field and matches by meaning (vector similarity; requires the embedding model). Best for meaningful prose where conceptually related queries should match; overkill for short categorical values.
 
 ## Sensitive Config
 
@@ -154,7 +159,7 @@ Field guidance:
 - Only `id` and `title` are required; every other WireDoc field is optional and dropped from the wire when unset.
 - `id` must be stable across polls.
 - `content` is the text Gety indexes and previews.
-- `content_format` is `plaintext` or `markdown`; it controls content rendering, not source type.
+- `content_format` is `plaintext` (the default) or `markdown`; it controls content rendering, not source type. Use `markdown` only for real markdown — plain text marked `markdown` collapses single line breaks and interprets characters like `#`/`*`.
 - `doc_type` should usually be `<namespace>:<type>`, such as `linear:issue`. Use `file:<ext>` only when the source really represents a file-like document and the UI should use file-extension presentation.
 - `doc_updated_at` must be RFC 3339 with `Z` or an offset. It should be the source document update time, not the indexing time.
 - `metadata.created_at`, if present, must be an RFC 3339 source creation timestamp; a non-string or non-RFC-3339 value fails the poll. It is shown in preview display.

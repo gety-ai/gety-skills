@@ -5,6 +5,14 @@ description: Turn any data source — an API, SaaS app, database, or local files
 
 # Create Custom Connector
 
+## Prerequisites
+
+- `git` — to clone the sample repo.
+- `deno` — the sample builds, tests, and runs entirely via `deno task` (no Node needed). Often not pre-installed; check `deno --version` and point the user to https://deno.com if missing.
+- Gety desktop app installed with CLI integration enabled — not required to build or test the connector, only to install it and verify with `gety search` / `gety doc`.
+
+Check these early; if `git` or `deno` is missing, ask the user to install before coding.
+
 ## Workflow
 
 1. Inspect the connector repo before editing.
@@ -20,7 +28,7 @@ description: Turn any data source — an API, SaaS app, database, or local files
 
 3. Design the Gety document contract.
    - Choose stable `id` values and a connector-owned `doc_type` such as `linear:issue` or `github:issue`.
-   - Set `content_format: "markdown"` when emitting markdown content; do not misuse `doc_type` to control markdown preview.
+   - Set `content_format: "markdown"` only when `content` is genuinely markdown (e.g. an issue body); keep plain text — titles, URLs, line-separated fields — as `"plaintext"` (the default). Do not misuse `doc_type` to control markdown preview.
    - Put stable browser URLs in `metadata.url` and use manifest `doc_link: { "kind": "url", "field": "url" }`.
    - Use `doc_updated_at` for the source document update time and `metadata.created_at` for source creation time when available.
 
@@ -42,13 +50,17 @@ description: Turn any data source — an API, SaaS app, database, or local files
    - After the runner finishes, tell the user the concrete output directory, usually `dev/runs/<timestamp>/`, and mention the key files to inspect.
    - After user installs or restarts in Gety, verify with `gety search <query>` and inspect connector status if available.
 
+7. Add an icon.
+   - Once indexing is verified, give the connector a recognizable icon so it stands out in Gety's connector list and the install dialog.
+   - Drop an image (PNG or SVG) in the connector root — e.g. `icon.png` — and set manifest `"icon": "icon.png"` (a relative path inside the connector root). Reuse the source's official logo when one exists.
+
 ## Anti-Patterns
 
 - Do not fetch every remote item into memory and yield once at the end.
 - Do not write ephemeral signed URLs or temporary local cache paths into `doc_link`.
 - Do not store large blobs in `metadata`; put searchable/renderable text in `content`.
-- Do not use fake progress updates or arbitrary batch limits unrelated to a real API/page boundary.
 - Do not treat `metadata.updated_at` as a fixed contract; use `doc_updated_at`.
+- Do not read `this.config`, `this.lastState`, or `this.signal` from the class constructor — the host injects them after construction, so in the constructor they are still defaults (`config` `{}`, `lastState` `null`, a `signal` that never aborts). Read them in `onLoad` or `poll`.
 - Do not edit generated `dist/main.js` by hand; edit `src/index.ts` and rebuild.
 
 ## Reference
