@@ -40,6 +40,9 @@ Check these early; if `git` or `deno` is missing, ask the user to install before
 
 5. Update `manifest.json`.
    - Keep `entry` pointed at the committed build output, usually `dist/main.js`.
+   - `capabilities` is required and non-empty; a polling/indexing data source must declare `["data-source"]`.
+   - Declare Gety compatibility via `min_gety_app_version` (SemVer).
+   - `schedule` supports `{ "strategy": "manual" }`, `{ "strategy": "interval", "interval_seconds": <n> }`, or `{ "strategy": "daily", "time": "HH:mm" }`; omit it for Gety's default.
    - Use lowercase/snake_case author-facing fields and valid config field types.
    - Do not add unsupported manifest fields such as `permissions`, `mode`, dynamic per-doc hooks, or per-doc `doc_link` (it is declared once for the whole connector type).
 

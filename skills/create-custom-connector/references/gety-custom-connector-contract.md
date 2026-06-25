@@ -49,10 +49,11 @@ Minimal manifest:
   "id": "my_connector",
   "name": "My Connector",
   "version": "0.1.0",
-  "min_app_version": "0.5.1",
+  "min_gety_app_version": "0.5.1",
+  "capabilities": ["data-source"],
   "entry": "dist/main.js",
   "description": "Indexes documents from My Connector.",
-  "schedule": { "interval": 3600 },
+  "schedule": { "strategy": "interval", "interval_seconds": 3600 },
   "doc_link": { "kind": "url", "field": "url" },
   "config": {
     "fields": [
@@ -71,13 +72,18 @@ Minimal manifest:
 Rules:
 
 - `id` must match `^[a-z0-9][a-z0-9_-]*$`: start with a lowercase letter or digit, then lowercase letters, digits, `_`, or `-` (no leading `_`/`-`, no uppercase, no dots). Prefer stable service names such as `linear` or `github`.
-- `version` and `min_app_version` are SemVer. Use the sample's current `min_app_version` unless the connector needs a newer Gety contract.
+- `version` and `min_gety_app_version` are SemVer. Use the sample's current `min_gety_app_version` unless the connector needs a newer Gety contract.
+- `capabilities` is a required non-empty array declaring which host integration points the connector participates in. A polling/indexing data source must declare `["data-source"]` (currently the only supported value); unknown values are rejected.
 - `entry` and `icon` must be relative paths inside the connector root. `icon` is optional (a PNG or SVG in the connector root) and is shown in Gety's connector list and install dialog.
-- `schedule.interval` is seconds; values below 60 are clamped. Omit the field for Gety's default or set a service-appropriate interval.
+- `schedule` declares the update strategy. Supported shapes:
+  - `{ "strategy": "manual" }` — no automatic polling; updates are triggered explicitly.
+  - `{ "strategy": "interval", "interval_seconds": 3600 }` — poll every `interval_seconds`; values below 60 are clamped.
+  - `{ "strategy": "daily", "time": "09:00" }` — poll once per day at `time` (`HH:mm` or `HH:mm:ss`, local time).
+  - Omit `schedule` to use Gety's default interval behavior.
 - `config.fields[].type` can be `text`, `password`, `number`, `checkbox`, `dropdown`, or `directory`.
 - Dropdown fields require ordered `options: [{ "value": "...", "label": "..." }]`.
 - Unknown fields are rejected. `permissions`, `mode`, dynamic hooks, and per-doc links are not supported; do not add them.
-- `schema.extra_indexed_fields` makes extra `metadata` keys searchable (Gety already indexes `title` and `content`). Each entry needs both `field` and `strategy`, e.g. `"schema": { "extra_indexed_fields": [{ "field": "status", "strategy": "fast_text" }] }`. Choose `strategy` by how the field should match:
+- `schema.extra_gety_indexed_fields` makes extra `metadata` keys searchable (Gety already indexes `title` and `content`). Each entry needs both `field` and `strategy`, e.g. `"schema": { "extra_gety_indexed_fields": [{ "field": "status", "strategy": "fast_text" }] }`. Choose `strategy` by how the field should match:
   - `fast_text` — in-memory index for fast exact / substring / fuzzy (and pinyin) matching on short values. Best for titles, names, tags, folders, statuses, and similar short metadata.
   - `full_text` — SQLite FTS5 keyword search with BM25 ranking and tokenization. Best for longer text where ranked keyword search matters.
   - `semantic` — embeds the field and matches by meaning (vector similarity; requires the embedding model). Best for meaningful prose where conceptually related queries should match; overkill for short categorical values.
