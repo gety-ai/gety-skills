@@ -12,7 +12,7 @@ Agent skills for [Gety](https://gety.ai) — connect AI agents to your local doc
 
 | Skill | Description | Install |
 |-------|-------------|---------|
-| [create-custom-connector](skills/create-custom-connector/SKILL.md) | Build a custom connector to index any API, SaaS, database, or local source into Gety | `npx skills add gety-ai/gety-skills --skills create-custom-connector` |
+| [create-gety-connector](skills/create-gety-connector/SKILL.md) | Build a custom connector to index any API, SaaS, database, or local source into Gety | `npx skills add gety-ai/gety-skills --skills create-gety-connector` |
 | [gety-cli](skills/gety-cli/README.md) | Search and retrieve local documents via Gety CLI | `npx skills add gety-ai/gety-skills --skills gety-cli` |
 
 ## Quick Start

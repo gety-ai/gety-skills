@@ -10,7 +10,7 @@
 
 | Skill                                 | 描述                    | 安装                                                     |
 | ------------------------------------- | --------------------- | ------------------------------------------------------ |
-| [create-custom-connector](skills/create-custom-connector/SKILL.md) | 构建自定义 connector，把任意 API、SaaS、数据库或本地数据源索引进 Gety | `npx skills add gety-ai/gety-skills --skills create-custom-connector` |
+| [create-gety-connector](skills/create-gety-connector/SKILL.md) | 构建自定义 connector，把任意 API、SaaS、数据库或本地数据源索引进 Gety | `npx skills add gety-ai/gety-skills --skills create-gety-connector` |
 | [gety-cli](skills/gety-cli/README.md) | 通过 Gety CLI 搜索和检索本地文档 | `npx skills add gety-ai/gety-skills --skills gety-cli` |
 
 ## 快速开始

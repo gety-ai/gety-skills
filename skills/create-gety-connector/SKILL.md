@@ -1,9 +1,9 @@
 ---
-name: create-custom-connector
+name: create-gety-connector
 description: Turn any data source — an API, SaaS app, database, or local files — into searchable Gety documents with a custom connector built from the gety-sample-connector template. Use when the user wants to create, adapt, or review a Gety custom connector — manifest.json, config fields, doc_link, the @gety-ai/connector-sdk poll()/onLoad lifecycle, incremental sync, and validating with the local runner and gety search.
 ---
 
-# Create Custom Connector
+# Create Gety Connector
 
 ## Prerequisites
 
