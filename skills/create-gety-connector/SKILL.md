@@ -46,12 +46,17 @@ Check these early; if `git` or `deno` is missing, ask the user to install before
    - Use lowercase/snake_case author-facing fields and valid config field types.
    - Do not add unsupported manifest fields such as `permissions`, `mode`, dynamic per-doc hooks, or per-doc `doc_link` (it is declared once for the whole connector type).
 
-6. Validate locally.
+6. Validate locally and install in Gety.
    - Run `deno task verify` when available; otherwise run the closest equivalents: generate, format/check, lint, tests, and build.
    - If config requires secrets, tell the user to put them in `.env` themselves, using keys such as `API_KEY` or `GETY_CONFIG_API_KEY`; do not ask them to paste secrets into chat.
-   - Use `deno task runner -- --reset-state` or repeated runner polls to verify emitted docs, deletes, state, and incremental behavior before asking the user to install in Gety.
-   - After the runner finishes, tell the user the concrete output directory, usually `dev/runs/<timestamp>/`, and mention the key files to inspect.
-   - After user installs or restarts in Gety, verify with `gety search <query>` and inspect connector status if available.
+   - Use `deno task runner -- --reset-state` or repeated runner polls to verify emitted docs, deletes, state, and incremental behavior.
+   - After the runner finishes, report the output directory (`dev/runs/<timestamp>/`) and inspect key files.
+   - Validate with CLI dry-run: `gety connector install <dir> --dry-run`.
+   - Install via CLI: `gety connector install <dir> [--config <file> | --set key=value]` (or guide user to install via Gety settings UI).
+   - Check status: `gety connector show <connector_id>` or `gety connector list --kind custom`.
+   - Trigger sync: `gety connector poll <connector_id>`.
+   - After code changes, rebuild (`deno task build`) and run `gety connector restart <connector_id>`.
+   - Verify search: `gety search <query> -c "<connector_name>"`.
 
 7. Add an icon.
    - Once indexing is verified, give the connector a recognizable icon so it stands out in Gety's connector list and the install dialog.

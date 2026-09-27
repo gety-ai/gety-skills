@@ -283,10 +283,58 @@ dev/runs/<timestamp>/
 
 The content file is `.md` for `content_format: "markdown"` and `.txt` otherwise (omitted when the doc has no content); the `.json` sidecar is always written.
 
-Gety lifecycle is UI-driven:
+## Gety Installation and Lifecycle
 
-1. User installs from the local connector folder in Gety Custom Connectors.
-2. User fills config fields.
-3. Gety starts indexing in the background.
-4. After code edits, rebuild and ask the user to click Restart.
-5. Verify indexed results with `gety search <query>` and, when needed, `gety doc <connector-id> <doc-id>`.
+You can manage custom connectors either via Gety CLI (`gety connector`) or through the desktop UI.
+
+### CLI Workflow (Recommended for Agents)
+
+1. **Dry-run validation**:
+   ```bash
+   gety connector install /path/to/connector --dry-run
+   ```
+   Validates manifest and config merge with zero side effects.
+
+2. **Install**:
+   ```bash
+   # Provide config via JSON file or --set flags
+   gety connector install /path/to/connector --config config.json
+   # Or set individual properties:
+   gety connector install /path/to/connector --set api_key='"secret"'
+   ```
+   *Note: Gety links the connector directory (does not copy). The source directory must remain available.*
+
+3. **Inspect status**:
+   ```bash
+   gety connector list --kind custom
+   gety connector show <connector_id>
+   ```
+
+4. **Trigger poll**:
+   ```bash
+   gety connector poll <connector_id>
+   ```
+
+5. **Reconfigure**:
+   ```bash
+   gety connector configure <connector_id> --schedule daily --at 09:00
+   ```
+
+6. **Restart after code changes**:
+   After rebuilding (`deno task build`), restart the connector process:
+   ```bash
+   gety connector restart <connector_id>
+   ```
+
+7. **Verify results**:
+   ```bash
+   gety search <query> -c "<connector_name>"
+   ```
+
+### UI Workflow
+
+1. Open **Gety → Settings → Connectors → Custom Connectors**.
+2. Click **Add Custom Connector** and select the local directory.
+3. Fill in the required configuration fields.
+4. Gety starts indexing in the background.
+5. After code edits, rebuild and click **Restart** in the UI.
