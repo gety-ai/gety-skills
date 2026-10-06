@@ -81,7 +81,15 @@ Run the translated command. If results aren't satisfactory:
 - Too many irrelevant results → add filters (`-c`, `-e`, `--match-scope`)
 - Too few results → broaden query, try synonyms, remove filters
 - Need more results → paginate with `--offset`
-- Need structured data for further processing → add `--json` and pipe to `jq`
+- Need structured data for further processing → add `--json` and pipe to `jq`. Keep the snippet text in what you print (for example `.snippets[].highlighted_text.text`), not only titles: a file's name often says nothing about what's inside it.
+
+#### Search for coverage, not just a first hit
+
+Gety's keyword search matches every word of a multi-word query literally, and it does not merge word forms (for example "renew" and "renewal", or singular and plural). So:
+
+- After a phrase query, also search the key concept as a single short keyword, and try its other word forms and common synonyms.
+- When the question asks for a complete answer ("who", "which", "all", "every", "list"), don't stop at the first document that looks like the answer. Run at least one more search for later notes, emails, follow-ups or corrections on the same topic, and check the snippet of every plausible result before ruling it out.
+- When the question asks "why" or "how did it change", look for where the decision was recorded (meeting notes, decision logs, memos, emails), not only the document that holds the numbers.
 
 ### Step 4: Read specific documents (conditional)
 
@@ -119,6 +127,8 @@ gety doc <connector_id> <doc_id>
 ### Step 5: Synthesize findings ⚠️ REQUIRED
 
 - Combine information from multiple documents into a coherent answer
+- When comparing versions (v1 vs v2, before vs after, plan vs actual), compare the underlying numbers line by line yourself. A summary or variance table inside a document may leave items out, and labels (such as a percentage written next to an amount) may not match the amounts; when they disagree, trust the amounts and say so.
+- Before answering a "who / which / all" question, ask yourself whether a later note could add to or change the list, and search for it if you haven't.
 - Cite source documents (name or path) so the user knows where info came from
 - If no relevant results found, say so clearly and suggest alternative search terms
 - NEVER paste raw gety output — always synthesize into natural language
