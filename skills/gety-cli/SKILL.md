@@ -55,10 +55,11 @@ Parse the user's natural language query and map it to gety CLI flags:
 | List data sources | → `gety connector list` (`--kind fs` / `--kind custom` / `--kind all`) |
 | Inspect connector details | → `gety connector show <id>` |
 | Add folder data source | → `gety connector add <path> [--name <name>]` |
-| Install custom connector | → `gety connector install <directory> [--config <file>]` |
+| Install custom connector | → `gety connector install <directory> --dry-run` (or `--github <owner/repo>` / `--npm <package>`), show the permission summary to the user, then replace `--dry-run` with `--yes`, keeping the source and config arguments, once the user approves |
 | Configure connector | → `gety connector configure <id> [options]` |
 | Restart connector | → `gety connector restart <id>` |
 | Sync / poll connector | → `gety connector poll <id>` |
+| Rebuild connector index from scratch | → `gety connector rebuild <id>` ⚠️ deletes the connector's documents; confirm with user first |
 | Enable / disable connector | → `gety connector enable <id>` / `gety connector disable <id>` |
 | Remove data source | → `gety connector remove <id>` ⚠️ confirm with user first |
 
