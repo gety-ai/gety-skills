@@ -4,6 +4,7 @@
 
 - Project layout
 - Manifest rules
+- Permissions and sandbox
 - Sensitive config
 - SDK lifecycle
 - WireDoc fields
@@ -11,6 +12,7 @@
 - Incremental sync and batching
 - Remote files
 - Validation workflow
+- Gety installation and lifecycle
 
 ## Project Layout
 
@@ -35,10 +37,13 @@ dist/main.js
 dist/main.js.map
 deno.json
 dev/runner.ts
+dev/gety-connector-sdk/mod.ts
 scripts/build.ts
 ```
 
-`manifest.json.entry` should point to the committed build artifact, usually `dist/main.js`. Gety loads the entry from the installed folder on every poll, so source edits require rebuild plus Restart in Gety. Any change to `manifest.json` (including adding an `icon`) requires uninstalling and reinstalling the connector in Gety, because Gety reads the manifest only at install time.
+`manifest.json.entry` points to the build output, usually `dist/main.js`: one esbuild bundle of `src/` plus its dependencies, except two kinds of imports the build leaves external because the runtime provides them: `@gety-ai/connector-sdk` (Gety maps it to its own SDK through an import map) and Node built-ins (`node:*`). The entry must resolve inside the connector folder.
+
+A local-folder install registers the folder itself (it does not copy it) and loads the entry from it on every poll, so source edits need a rebuild plus restart. Gety snapshots the manifest at install time and never re-reads `manifest.json`; that snapshot is also the record of the permissions the user consented to. Any change to `manifest.json` (permissions, config fields, schedule, entry, icon) therefore needs `gety connector remove <id>` and a fresh install, which shows the permission review again.
 
 ## Manifest Rules
 
@@ -49,12 +54,13 @@ Minimal manifest:
   "id": "my_connector",
   "name": "My Connector",
   "version": "0.1.0",
-  "min_gety_app_version": "0.5.1",
+  "min_gety_app_version": "0.7.0",
   "capabilities": ["data-source"],
   "entry": "dist/main.js",
   "description": "Indexes documents from My Connector.",
   "schedule": { "strategy": "interval", "interval_seconds": 3600 },
   "doc_link": { "kind": "url", "field": "url" },
+  "permissions": { "net": ["api.example.com"] },
   "config": {
     "fields": [
       {
@@ -71,9 +77,9 @@ Minimal manifest:
 
 Rules:
 
-- `id` must match `^[a-z0-9][a-z0-9_-]*$`: start with a lowercase letter or digit, then lowercase letters, digits, `_`, or `-` (no leading `_`/`-`, no uppercase, no dots). Prefer stable service names such as `linear` or `github`.
-- `version` and `min_gety_app_version` are SemVer. Use the sample's current `min_gety_app_version` unless the connector needs a newer Gety contract.
-- `capabilities` is a required non-empty array declaring which host integration points the connector participates in. A polling/indexing data source must declare `["data-source"]` (currently the only supported value); unknown values are rejected.
+- `id` must match `^[a-z0-9][a-z0-9_-]*$`: start with a lowercase letter or digit, then lowercase letters, digits, `_`, or `-` (no leading `_`/`-`, no uppercase, no dots). Keep it stable, and for a connector others will install, prefix it with your own name (`acme-linear`, not `linear`): two connectors with the same id cannot be installed side by side. A custom connector id cannot replace a built-in connector type.
+- `version` and `min_gety_app_version` are SemVer. A manifest that declares `permissions` must set `min_gety_app_version` to `0.7.0` or later, otherwise it is invalid; this makes older Gety versions refuse the connector instead of running it without a sandbox.
+- `capabilities` is a required non-empty array declaring which host integration points the connector participates in. A polling/indexing data source must declare `["data-source"]` (currently the only supported value); unknown values are rejected. Capabilities are host features, not sandbox permissions.
 - `entry` and `icon` must be relative paths inside the connector root. `icon` is optional (a PNG or SVG in the connector root) and is shown in Gety's connector list and install dialog.
 - `schedule` declares the update strategy. Supported shapes:
   - `{ "strategy": "manual" }` — no automatic polling; updates are triggered explicitly.
@@ -82,11 +88,77 @@ Rules:
   - Omit `schedule` to use Gety's default interval behavior.
 - `config.fields[].type` can be `text`, `password`, `number`, `checkbox`, `dropdown`, or `directory`.
 - Dropdown fields require ordered `options: [{ "value": "...", "label": "..." }]`.
-- Unknown fields are rejected. `permissions`, `mode`, dynamic hooks, and per-doc links are not supported; do not add them.
+- `permissions` is described in the next section. It may be omitted but never set to `null`.
+- Unknown fields are rejected. `mode`, dynamic hooks, and per-doc links are not supported; do not add them.
 - `schema.extra_gety_indexed_fields` makes extra `metadata` keys searchable (Gety already indexes `title` and `content`). Each entry needs both `field` and `strategy`, e.g. `"schema": { "extra_gety_indexed_fields": [{ "field": "status", "strategy": "fast_text" }] }`. Choose `strategy` by how the field should match:
   - `fast_text` — in-memory index for fast exact / substring / fuzzy (and pinyin) matching on short values. Best for titles, names, tags, folders, statuses, and similar short metadata.
   - `full_text` — SQLite FTS5 keyword search with BM25 ranking and tokenization. Best for longer text where ranked keyword search matters.
   - `semantic` — embeds the field and matches by meaning (vector similarity; requires the embedding model). Best for meaningful prose where conceptually related queries should match; overkill for short categorical values.
+
+## Permissions and Sandbox
+
+`permissions` decides what the connector process may do. Gety shows it to the user before every install (desktop app and `gety connector install`), and enforces it with Deno's permission flags.
+
+### Modes
+
+- **Sandbox:** `permissions` is an object, `{}` included. The connector gets the base access below plus exactly what it lists; everything else is denied.
+- **Full access:** `permissions` is omitted or `"unrestricted"`. No sandbox; the desktop review shows a red warning and asks for an extra confirmation. Older connectors keep working this way. Every new connector should declare `permissions`; use `{}` when it needs nothing beyond base access.
+
+### Entries
+
+```json
+"permissions": {
+  "net": ["api.notion.com", "*.notion.so", "files.example.com:8443", { "config_field": "base_url" }],
+  "read": [
+    "~/.codex/sessions",
+    { "path": "~/Library/Application Support/Google/Chrome", "os": ["macos"] },
+    { "config_field": "export_dir" }
+  ],
+  "env": ["ACME_LOG_LEVEL"],
+  "run": ["git"]
+}
+```
+
+- `net`: `"*"` (any host); `host` or `host:port` (no port = any port); `*.domain` (the domain itself and every subdomain, any port); an IPv4 or `[IPv6]` literal, optionally with a port. Write a lowercase ASCII host (punycode for IDN), never a URL: no scheme, path, or user info. Every redirect hop of `fetch` is checked, so also declare redirect targets, CDN/file hosts, and auth/token hosts.
+- `read`: `"~"` or `"~/dir/…"`, granting that folder and everything below. Absolute paths, empty/`.`/`..` segments, and backslashes are rejected. `{ "path": "~/…", "os": ["macos", "windows", "linux"] }` applies (and is shown) only on the listed systems. For a folder the user picks, use a `directory` config field instead of an absolute path.
+- `env`: exact variable names (`^[A-Za-z_][A-Za-z0-9_]*$`, no wildcards). Reading a variable that is not granted does not fail: `Deno.env.get` returns `undefined` as if it were unset, so a missing `env` entry fails silently. `env` grants reading the variable, not access to what it points to: if a location can move (a tool that honors its own `*_HOME` variable), let the user pick it in a `directory` config field and grant it with `{ "config_field": "<id>" }` in `read`.
+- `run`: program names without paths (`^[A-Za-z0-9][A-Za-z0-9._+-]*$`). A started program runs outside the sandbox with the full environment, so `run` is equivalent to full access. See Running Programs below.
+- `{ "config_field": "<id>" }`: the grant comes from the user's config. In `net` it must reference a `text` field whose value is a URL or `host[:port]` without wildcards (only the host and an explicit port are granted); in `read` a `directory` field holding an absolute path. `password` fields can never be referenced. An empty value grants nothing. Gety validates the value when the user installs or saves config and re-derives grants at every start; changing config does not ask for consent again. The desktop install review resolves these entries against the field defaults; `gety connector install` (including `--dry-run`) resolves them against the merged config passed to that command (`--config`/`--set`).
+
+### Running Programs
+
+Deno resolves each `run` name through `PATH` when the connector starts, and only that exact absolute path may be started; the same program at another path, or through its resolved symlink target, is denied. A name not found on `PATH` grants nothing. On macOS Gety appends `/opt/homebrew/bin` and `/usr/local/bin` to `PATH` when missing, because an app started from Finder gets only launchd's minimal `PATH`. Directories that shells add at startup (nvm, volta) are not on that `PATH`, so CLIs installed with them are not found; ask users to link the program into one of the directories above, or prefer an HTTP API.
+
+### Risk Tiers
+
+Gety computes one tier per connector and colors the review by it: `offline` (no `net`), `network_only` (`net` without `read`/`env`), `read_and_network`, `high_risk`, `unrestricted` (full access).
+
+A connector is `high_risk` when `run` is non-empty, `net` contains `"*"` or a single-label wildcard such as `*.com`, or `read` contains `"~"` (on the current OS). In the desktop app, `high_risk` and `unrestricted` require an extra confirmation that lists the reasons. The CLI prints the same risk lines (`!`) but asks only once on a terminal and not at all with `--yes`, so an agent must get the user's approval of the summary before passing `--yes`. Stay below `high_risk` whenever the source allows: name exact API hosts or `*.vendor.com` instead of `*` / `*.com`, read `~/.app/sub` instead of `~`, and call HTTP APIs with `fetch` instead of running a CLI.
+
+### Base Access
+
+Every sandboxed connector has, without declaring it (the review does not list these):
+
+- read/write `this.dataDir`: the working directory; persists between syncs; deleted when the connector is uninstalled.
+- read/write a per-sync temp folder (`TMPDIR`, `TMP`, `TEMP` point to it); deleted after each sync. `Deno.makeTempDir()` / `Deno.makeTempFile()` land there.
+- system info: `homedir`, `cpus`, `systemMemoryInfo`, `osRelease`, `osUptime`, `loadavg`, `statfs`.
+- read its own code.
+- its own `DENO_DIR`, so `localStorage`, the Cache API, and the module cache are not shared with other connectors.
+
+Never available in the sandbox: writing anywhere else, `ffi`, the hostname, network interfaces, user/group ids, and remote (`https:`) or `npm:` imports. A connector that truly needs them must run with full access; avoid that.
+
+Use `this.dataDir` for state too large for `lastState` and caches that should survive between syncs; use the temp folder for scratch copies (for example, a copy of a locked SQLite file) that only one sync needs.
+
+### What Fails in the Sandbox
+
+| Symptom | Fix |
+| --- | --- |
+| `import` from `npm:`/`jsr:`/`https:` at run time, or a dynamic `import()` of one, fails | Let the build bundle the dependency into the entry (`deno task build` does this with esbuild); only `@gety-ai/connector-sdk` and `node:*` built-ins stay external. Gety runs with `--no-config`, so `deno.json` import maps do not apply at run time. |
+| `permission denied: net access to "host:443" is not granted by the connector's manifest` | Add the host (and every redirect / CDN host) to `net`. |
+| `getaddrinfo EPERM <host>` from `node:http`/`node:https` | Same missing `net` entry; Node APIs do not name the permission. Prefer `fetch`. |
+| `Deno.env.get("HOME")` or a library's home lookup returns `undefined` or the wrong folder | Use `this.homeDir` / `this.expandHome("~/.app")`; they match the paths Gety grants for `~`. |
+| `... access ... is not available to sandboxed connectors` (`write`, `sys`, `ffi`, `import`) | No manifest entry grants these: write to `this.dataDir` or the temp folder, drop identity-type `sys` calls, bundle imports. |
+| `permission denied: read access to "<path>" ...` | Add the folder to `read` (`~/…`, or a `directory` config field). |
 
 ## Sensitive Config
 
@@ -97,6 +169,8 @@ For secrets such as API keys, tokens, passwords, and authorization headers:
 - Ask the user to edit `.env` themselves for local runner validation.
 - Tell the user the exact environment variable names. For `api_key`, the runner accepts `GETY_CONFIG_API_KEY` or `API_KEY`; for `auth.api_key`, it accepts `GETY_CONFIG_AUTH_API_KEY` or `AUTH_API_KEY`.
 - Keep `.env` out of git and use `.env.example` for non-secret placeholders only.
+- With the Gety CLI, pass secrets with `--secret <field>` (no-echo prompt) or `--secret-file <field>=<path>`. `--set` rejects password fields.
+- Password fields cannot be referenced from `permissions` (`config_field`).
 
 ## SDK Lifecycle
 
@@ -133,10 +207,30 @@ Lifecycle facts:
 
 - Each scheduled poll starts a fresh connector runtime process.
 - `this.config` is injected from Gety's install/config form.
-- `this.lastState` is the host-persisted state from the last successful poll progress.
-- `this.signal` is aborted when the user disables or restarts the connector.
+- `this.lastState` is the state Gety committed after the last poll that completed successfully, or `null`.
+- `this.signal` is aborted when the user disables or restarts the connector or Gety cancels the poll. Cancellation is cooperative first, then the process is killed after a grace period; release sockets and temp files when it aborts.
+- `this.dataDir` is the absolute path of the persistent data folder (also the working directory). `this.homeDir` is the home directory Gety resolves `~` against, and `this.expandHome('~/x')` expands a leading `~` with it. Do not read `HOME` from the environment.
 - `onLoad` is optional and may be async.
-- Class fields do not persist across polls. Use state or an explicit on-disk cache only when needed.
+- Class fields do not persist across polls. Use state, or files in `this.dataDir`.
+- A poll that sends Gety nothing for 10 minutes is treated as hung and cancelled. During long work, yield batches or log a low-frequency progress line such as `console.info('still syncing...')`.
+
+The build leaves `@gety-ai/connector-sdk` external: installed connectors run against the SDK Gety ships (mapped by Gety's import map), which provides `dataDir`, `homeDir`, and `expandHome`, and Gety's runner injects `config`, `lastState`, `signal`, `dataDir`, and `homeDir`. The sample's `dev/gety-connector-sdk/mod.ts` is only a development copy that `deno.json` maps the import to for `deno task check`, tests, and the local runner; editing it changes nothing in Gety. If an older shim lacks `dataDir`, `homeDir`, and `expandHome`, add them so the connector type-checks and runs locally:
+
+```ts
+/** Absolute path of this connector's persistent data directory. */
+protected dataDir = '';
+/** Home directory Gety resolves `~` in `permissions.read` against. */
+protected homeDir = '';
+
+protected expandHome(path: string): string {
+	const windows = Deno.build.os === 'windows';
+	if (path === '~') return this.homeDir;
+	const separators = windows ? /[\\/]/ : /\//;
+	if (!path.startsWith('~') || !separators.test(path[1] ?? '')) return path;
+	const rest = path.slice(2).split(separators).filter((segment) => segment !== '');
+	return [this.homeDir.replace(/[\\/]+$/, ''), ...rest].join(windows ? '\\' : '/');
+}
+```
 
 ## WireDoc Fields
 
@@ -182,12 +276,14 @@ Field guidance:
 
 Resolution rules:
 
+- `kind` is `url` or `file`.
 - `field` is either a core doc field (`id`, `parent_id`, `title`, `content`, `doc_type`) or a direct metadata key.
 - Use `"field": "url"` to read `metadata.url`.
 - Do not use `"metadata.url"`; dot paths are not supported.
 - Missing, empty, or non-string values mean the doc has no link.
 - URL links open in the browser; Gety does not fetch URL content.
-- File links must be stable local filesystem paths. Do not point them at temporary cache files.
+- File links must be stable local filesystem paths of the user's own files. Do not point them at temporary cache files.
+- Gety refuses to open a link (file link, `file:` URL, or local path) that points into any connector's folders — its data and temp folders, Gety's connector directory, or the connector's code folder — or to a file that does not exist. "Show in folder" still works. So never write files into `this.dataDir` or the temp folder and link to them; link to the upstream service or to the user's files.
 
 Preview/icon implications:
 
@@ -205,16 +301,16 @@ Prefer real source boundaries:
 
 State guidance:
 
-- State should be a durable checkpoint after the yielded updates.
+- Gety indexes each yielded batch as it arrives, but commits the state of the last yielded batch only after the whole poll finishes successfully. If a poll fails, the next poll starts again from the previous committed state, and some docs of the failed poll may already be indexed. Make every batch safe to replay: `upsert` by stable id converges.
 - Do not advance state before yielding the corresponding docs.
-- If a poll fails after a yielded batch, Gety can retry from the last committed state.
 - For high-water-mark APIs, keep enough state to avoid missing updates with equal timestamps.
 - For local sources, prefer compact fingerprints such as relative path, mtime, and size over re-reading everything.
+- Config plus state must fit the 16 MiB start frame; a poll whose next state would not fit fails and keeps the previous checkpoint. Keep state compact and put large maps in `this.dataDir`.
 
 Batching and size:
 
 - Large update batches are transmitted safely, so you can `yield` a page of docs at once.
-- Gety limits document content to about 10 MB; do not emit huge individual docs or huge metadata blobs.
+- Gety keeps at most 10 MB (UTF-8 bytes) of each document's `content` and truncates the rest; do not emit huge individual docs or huge metadata blobs.
 - Transmission safety does not lower memory use: building every doc before yielding still peaks. Stream pages instead.
 
 ## Remote Files
@@ -225,7 +321,7 @@ For remote files (Dropbox/Drive-like):
 
 - Put any text the connector already has into `content`, and a stable web URL into `metadata.url`.
 - Represent images and PDFs as extracted/OCR text only if the connector already has that text.
-- Do not yield temporary local paths as `file` links for remote files.
+- Do not yield temporary local paths, or files the connector downloaded into its own folders, as `file` links; Gety refuses to open them.
 
 Cached source-file preview, lazy download, host-side extraction, and download/reveal of remote files are not supported. If the user needs those, say so plainly and stop.
 
@@ -283,48 +379,52 @@ dev/runs/<timestamp>/
 
 The content file is `.md` for `content_format: "markdown"` and `.txt` otherwise (omitted when the doc has no content); the `.json` sidecar is always written.
 
+Check whether the sample's runner enforces the sandbox before trusting it: if `deno task runner` runs `deno run -A` and the runner only injects `config`, `lastState`, and `signal`, it does not apply `permissions` and leaves `dataDir`/`homeDir` empty. Then a missing permission only shows up after installing in Gety: poll the connector; `gety connector show <id>` reports `retrying` or `stopped` with a short code (`retrying`, `runtime_error`), and the connector's row in Gety's Custom Connectors settings shows the full message, e.g. `permission denied: net access to "api.example.com:443" is not granted by the connector's manifest`.
+
 ## Gety Installation and Lifecycle
 
-You can manage custom connectors either via Gety CLI (`gety connector`) or through the desktop UI.
+You can manage custom connectors either via Gety CLI (`gety connector`) or through the desktop UI. Every install asks the user to consent to the connector's permissions.
 
 ### CLI Workflow (Recommended for Agents)
 
 1. **Dry-run validation**:
    ```bash
-   gety connector install /path/to/connector --dry-run
+   gety connector install /path/to/connector --dry-run --secret api_key
    ```
-   Validates manifest and config merge with zero side effects.
+   Validates the manifest and the merged config with zero side effects, and prints the permission summary (risks first, lines starting with `!`) and the permission fingerprint. With `--json` the preview carries the full `permissions` report.
 
 2. **Install**:
    ```bash
-   # Provide config via JSON file or --set flags
-   gety connector install /path/to/connector --config config.json
-   # Or set individual properties:
-   gety connector install /path/to/connector --set api_key='"secret"'
+   gety connector install /path/to/connector --yes --secret api_key
+   gety connector install /path/to/connector --yes --config config.json --set 'workspace="acme"'
    ```
-   *Note: Gety links the connector directory (does not copy). The source directory must remain available.*
+   Config precedence: manifest defaults < `--config <file|->` < `--set key=<json>` < `--secret`/`--secret-file`. Consent: `--yes` installs without asking; on a terminal the CLI asks `Install "<name>" with these permissions? [y/N]`; otherwise it fails with `consent_required`. Reading config or a secret from stdin requires `--yes` (else `stdin_conflict`), so review with `--dry-run` first. If the manifest's permissions change between preview and commit the install fails with `permissions_changed`; run it again. Gety registers the folder (no copy): it must stay available. The folder must not be inside Gety's connector data directory.
 
 3. **Inspect status**:
    ```bash
    gety connector list --kind custom
-   gety connector show <connector_id>
+   gety connector show <connector_id> --json
    ```
+   `show` returns the status (`state` plus a short `detail` code such as `runtime_error`; the full error text is shown in the app's connector row), the redacted config, the permissions granted now (`config_field` entries resolved against the saved config), and the code origin.
 
 4. **Trigger poll**:
    ```bash
    gety connector poll <connector_id>
    ```
+   Returns `accepted` without waiting; check `show` and `gety search` afterwards.
 
 5. **Reconfigure**:
    ```bash
    gety connector configure <connector_id> --schedule daily --at 09:00
+   gety connector configure <connector_id> --set 'workspace="other"'
    ```
 
 6. **Restart after code changes**:
-   After rebuilding (`deno task build`), restart the connector process:
+   After rebuilding (`deno task build`), reload the entry:
    ```bash
    gety connector restart <connector_id>
    ```
+   `restart` does not re-read `manifest.json`. After manifest changes, `gety connector remove <connector_id>` and install again.
 
 7. **Verify results**:
    ```bash
@@ -333,8 +433,8 @@ You can manage custom connectors either via Gety CLI (`gety connector`) or throu
 
 ### UI Workflow
 
-1. Open **Gety → Settings → Connectors → Custom Connectors**.
-2. Click **Add Custom Connector** and select the local directory.
-3. Fill in the required configuration fields.
-4. Gety starts indexing in the background.
-5. After code edits, rebuild and click **Restart** in the UI.
+1. Open **Gety → Settings → Connectors**, choose **Add connector → Install from local folder**, and select the connector folder.
+2. Gety shows the permission review first: the connector card, then the grants grouped as network / read files / environment variables / run programs. High-risk and full-access connectors need an extra confirmation in the app.
+3. Fill in the configuration fields; Gety installs and starts indexing in the background. Cancelling at any step installs nothing.
+4. Each row has a permissions button that shows the permissions in effect.
+5. After code edits, rebuild and click **Restart**; after manifest edits, remove and reinstall.
