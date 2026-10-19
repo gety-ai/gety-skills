@@ -1,6 +1,6 @@
 ---
 name: create-gety-connector
-description: Turn any data source — an API, SaaS app, database, or local files — into searchable Gety documents with a custom connector built from the gety-sample-connector template. Use when the user wants to create, adapt, or review a Gety custom connector — manifest.json, sandbox permissions, config fields, doc_link, the @gety-ai/connector-sdk poll()/onLoad lifecycle, incremental sync, and validating with the local runner, gety connector install, and gety search.
+description: Turn any data source — an API, SaaS app, database, or local files — into searchable Gety documents with a custom connector built from the gety-sample-connector template. Use when the user wants to create, adapt, review, or publish a Gety custom connector — manifest.json, sandbox permissions, config fields, doc_link, the @gety-ai/connector-sdk poll()/onLoad lifecycle, incremental sync, validating with the local runner, gety connector install, and gety search, and publishing via GitHub Releases or npm.
 ---
 
 # Create Gety Connector
@@ -66,6 +66,12 @@ Check these early; if `git` or `deno` is missing, ask the user to install before
 7. Add an icon.
    - Once indexing is verified, give the connector a recognizable icon so it stands out in Gety's connector list and the install dialog.
    - Drop an image (PNG or SVG) in the connector root — e.g. `icon.png` — and set manifest `"icon": "icon.png"` (a relative path inside the connector root). Reuse the source's official logo when one exists.
+
+8. Publish (only when the user asks).
+   - GitHub Releases: one Release per version, tag = manifest `version` (optional `v`), assets `manifest.json` + `<id>-<version>.zip` built by the sample's `deno task package`; push a `v*` tag to run the sample's release workflow.
+   - npm: `package.json` carries the whole manifest in `gety`, `gety.version` equals the package `version`, and `files` lists the entry, every runtime file, and `CHANGELOG.md` if there is one (npm skips it once `files` is set). A published version can never be republished, so its permissions are final.
+   - Test a published version as users get it: publish a pre-release first (GitHub pre-release, or `npm publish --tag next`), remove the local-folder install of the same id, then run `gety connector install --github <owner/repo> --version <tag> --dry-run` or `--npm <name>@<version> --dry-run`, install, and check `origin`/`digest` in `gety connector show`.
+   - Read the Publishing section of the reference for package limits, pre-release handling, and the npmmirror delay.
 
 ## Anti-Patterns
 

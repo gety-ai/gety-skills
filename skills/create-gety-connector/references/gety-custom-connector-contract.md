@@ -13,6 +13,7 @@
 - Remote files
 - Validation workflow
 - Gety installation and lifecycle
+- Publishing (GitHub Releases, npm)
 
 ## Project Layout
 
@@ -438,3 +439,76 @@ You can manage custom connectors either via Gety CLI (`gety connector`) or throu
 3. Fill in the configuration fields; Gety installs and starts indexing in the background. Cancelling at any step installs nothing.
 4. Each row has a permissions button that shows the permissions in effect.
 5. After code edits, rebuild and click **Restart**; after manifest edits, remove and reinstall.
+
+## Publishing
+
+Users install a published connector with **Add connector → Install from remote** in the app, or with `gety connector install --github …` / `--npm …`. In both cases Gety:
+
+- never builds from source: it installs the packaged files and keeps its own copy of the code (deleted on `remove`);
+- shows the permissions from a small metadata download (the `manifest.json` asset, or the registry metadata of that npm version) before the user confirms, then fetches that metadata again, downloads the package, and checks it: the `id` and `version` must match what the user reviewed, the permissions (with the config fields they reference) must have the same fingerprint as in the review (else `permissions_changed`), and the package's manifest must match the metadata fetched at commit time (GitHub: byte-for-byte; npm: the `gety` object equal as JSON). Other manifest fields are not pinned to the preview;
+- records the SHA-256 of the package; `gety connector show` reports `origin` (`github` / `npm`), `tag` (GitHub), and `digest`.
+
+Rules shared by both sources:
+
+- The package contains the built entry and every file the connector needs at run time (icon, source map, data files). Build output goes into the package; it does not have to be committed.
+- Limits: at most 100 MiB packed, 20,000 files and 500 MiB unpacked; no symbolic or hard links.
+- Public sources only; Gety sends no tokens.
+- One install per manifest id. Prefix `id` with your own name (`acme-linear`, not `linear`): a connector with the same id cannot be installed next to yours. Remove a local-folder install of the same id before installing the published one (otherwise `already_installed`); switching source means remove and install again.
+- Raising `min_gety_app_version` does not strand users: older Gety reports `version_incompatible`, and the user can still install an older version by naming it.
+- Publishing to both: keep `manifest.json` as the single source and generate the `gety` object in `package.json` from it in the packaging step.
+
+### GitHub Releases
+
+- One Release per version. The tag is the manifest `version`, optionally prefixed with `v` (`1.2.0` or `v1.2.0`).
+- Two assets:
+  - `manifest.json`, byte-for-byte identical to the `manifest.json` inside the zip (write both from the same file; even whitespace differences fail the install).
+  - `<id>-<version>.zip`, whose root is the connector directory (`manifest.json`, the entry, runtime files) without a wrapping folder; entries stored or deflate-compressed.
+- Gety installs the Release GitHub marks as Latest by default. Pre-releases install only via their Release link (`https://github.com/<owner>/<repo>/releases/tag/<tag>`) or `--version <tag>`.
+- Gety only downloads from github.com (no GitHub API); private repositories and monorepo subdirectories are not supported.
+- Turn on immutable releases in the repository settings so a published tag and its assets cannot change.
+- The sample implements this: `deno task build && deno task package` writes both assets to `release/` and checks them (`--tag <tag>` also checks the tag; `--include <path>` adds files beyond `manifest.json`, the entry with its `.map`, and the icon). Its `.github/workflows/release.yml` publishes a Release when a `v*` tag is pushed (pre-release when the version has a pre-release part); other repositories can call that workflow, as the sample README shows.
+
+```bash
+gety connector install --github acme/gety-linear --dry-run
+gety connector install --github acme/gety-linear --version v1.2.0-beta.1 --yes
+gety connector install --github https://github.com/acme/gety-linear/releases/tag/v1.2.0
+```
+
+Errors: `invalid_github_input`, `release_not_found` (no public repo, no Release, or no `manifest.json` asset), `source_unavailable`, `version_incompatible`, `invalid_package` (the Release breaks the convention).
+
+### npm
+
+The package's `package.json` carries the complete manifest in a `gety` object:
+
+```json
+{
+  "name": "@acme/gety-linear",
+  "version": "1.2.0",
+  "files": ["dist/main.js", "dist/main.js.map", "icon.svg", "CHANGELOG.md"],
+  "gety": {
+    "id": "acme-linear",
+    "name": "Acme Linear",
+    "version": "1.2.0",
+    "min_gety_app_version": "0.7.0",
+    "entry": "dist/main.js",
+    "icon": "icon.svg",
+    "capabilities": ["data-source"],
+    "permissions": { "net": ["api.linear.app"] }
+  }
+}
+```
+
+- `gety` is the whole manifest; a `manifest.json` in the package is not read. Paths in it (`entry`, `icon`) are relative to the package root.
+- `gety.version` must equal the package `version` (SemVer, including pre-release and build metadata), otherwise `invalid_package`.
+- `files` must include the entry and every runtime file. List `CHANGELOG.md` too if you keep one: npm does not pack it on its own once `files` is set (Gety does not require it). Check with `npm pack --dry-run` before publishing.
+- Gety installs the version the `latest` dist-tag points to, or an exact version the user names (`@acme/gety-linear@1.3.0-beta.1`, `--version 1.3.0-beta.1`, or `https://www.npmjs.com/package/@acme/gety-linear/v/1.3.0-beta.1`). Other dist-tags and ranges are not supported, so publish pre-releases under a non-`latest` tag (`npm publish --tag next`) to keep `latest` stable.
+- npm never lets a version be republished, so a version's permissions are fixed once published; changing them means publishing a new version.
+- The registry must list a `sha512` integrity for the tarball, and the tarball may contain only regular files and directories under `package/`.
+- When the system region is mainland China, Gety reads npmmirror first and falls back to registry.npmjs.org when the mirror lacks the package or version or is unreachable. The mirror usually syncs within minutes; until then an install without a version can resolve to the mirror's older `latest`.
+
+```bash
+gety connector install --npm @acme/gety-linear --dry-run
+gety connector install --npm @acme/gety-linear@1.2.0 --yes
+```
+
+Errors: `invalid_npm_input`, `package_not_found` (no such public package or version on any registry tried), plus `source_unavailable`, `version_incompatible`, `invalid_package` as for GitHub.
