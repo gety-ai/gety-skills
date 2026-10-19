@@ -314,6 +314,18 @@ Batching and size:
 - Gety keeps at most 10 MB (UTF-8 bytes) of each document's `content` and truncates the rest; do not emit huge individual docs or huge metadata blobs.
 - Transmission safety does not lower memory use: building every doc before yielding still peaks. Stream pages instead.
 
+Sync and rebuild index:
+
+- **Sync** (scheduled syncs, **Sync now**, `gety connector poll <id>`) is incremental and starts from `lastState`.
+- **Rebuild index** (the row's **More actions → Rebuild index**, `gety connector rebuild <id>`, and Gety's global **Clean up & rebuild**) deletes every document of the connector, clears `lastState` and the last sync time, then syncs right away with `lastState === null`. The request is persisted: if Gety quits, the connector is disabled, or it fails to start before the delete completes, the rebuild finishes on the next start. A disabled connector refuses it with `not_running`.
+- A rebuild does not clear `this.dataDir`; only uninstalling (or reinstalling) does.
+
+What the connector must tolerate:
+
+- `lastState === null` can happen at any time and means only that there is no committed checkpoint: the index may be empty (first sync, rebuild) or partly filled (an earlier poll that failed before committing). Do a complete, replay-safe enumeration of every in-scope document. Do not skip items because a cache in `this.dataDir` says they were already sent; when `lastState` is `null`, discard such caches, or tie them to a value stored in the state so a cleared state invalidates them.
+- A failed poll is replayed from the previous state (see State guidance).
+- When a change alters ids, doc fields, the content mapping, or what the cursor skips, an incremental sync leaves stale documents behind: tell users to run **Rebuild index** (`gety connector rebuild <id>`) after updating.
+
 ## Remote Files
 
 Links resolve only from the manifest `doc_link` and each doc's fields; a connector cannot resolve files or links dynamically at preview time.
@@ -408,11 +420,16 @@ You can manage custom connectors either via Gety CLI (`gety connector`) or throu
    ```
    `show` returns the status (`state` plus a short `detail` code such as `runtime_error`; the full error text is shown in the app's connector row), the redacted config, the permissions granted now (`config_field` entries resolved against the saved config), and the code origin.
 
-4. **Trigger poll**:
+4. **Trigger sync or rebuild**:
    ```bash
    gety connector poll <connector_id>
    ```
    Returns `accepted` without waiting; check `show` and `gety search` afterwards.
+
+   ```bash
+   gety connector rebuild <connector_id>
+   ```
+   Deletes the connector's documents and syncs again from `lastState === null`, without asking for confirmation; also returns `accepted` immediately. Use it after changes that alter ids, fields, or what the state cursor skips. Needs a Gety CLI protocol v7 build.
 
 5. **Reconfigure**:
    ```bash
@@ -437,8 +454,8 @@ You can manage custom connectors either via Gety CLI (`gety connector`) or throu
 1. Open **Gety → Settings → Connectors**, choose **Add connector → Install from local folder**, and select the connector folder.
 2. Gety shows the permission review first: the connector card, then the grants grouped as network / read files / environment variables / run programs. High-risk and full-access connectors need an extra confirmation in the app.
 3. Fill in the configuration fields; Gety installs and starts indexing in the background. Cancelling at any step installs nothing.
-4. Each row has a permissions button that shows the permissions in effect.
-5. After code edits, rebuild and click **Restart**; after manifest edits, remove and reinstall.
+4. Each row has a permissions button that shows the permissions in effect, **Sync now**, and **More actions → Rebuild index** (enabled connectors only).
+5. After code edits, run `deno task build` and click **Restart**; after manifest edits, remove and reinstall.
 
 ## Publishing
 

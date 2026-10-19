@@ -38,6 +38,7 @@ Check these early; if `git` or `deno` is missing, ask the user to install before
    - Use `this.config`, `this.lastState`, and `this.signal`; `onLoad` is optional and can be async.
    - Stream pages and `yield` real update batches as they are fetched. Gety commits the state only after the whole poll succeeds, so every batch must be safe to replay.
    - Do not rely on class fields for cross-poll cache; each poll is a fresh runtime process. Persist caches in `this.dataDir`; use the per-sync temp folder (`Deno.makeTempDir()`) for scratch files.
+   - Treat `lastState === null` as "no committed checkpoint" and do a complete, replay-safe enumeration: a **Rebuild index** deletes every doc and restarts from `null` while `this.dataDir` survives, and a first sync that failed may have left docs behind. Never skip items because a `dataDir` cache says they were already sent.
    - Resolve `~` paths with `this.homeDir` / `this.expandHome()`, never `HOME` from the environment.
    - Let the build bundle every dependency into the entry; only `@gety-ai/connector-sdk` (Gety supplies its own SDK at run time) and `node:*` built-ins stay external. Sandboxed connectors cannot import `npm:`, `jsr:`, or `https:` modules at run time.
 
@@ -60,7 +61,7 @@ Check these early; if `git` or `deno` is missing, ask the user to install before
    - Install: `gety connector install <dir> --yes [--config <file>] [--set key=<json>] [--secret <field>]` only after the user approved that summary; the CLI asks at most once and `--yes` skips the prompt, whatever the risk tier (or guide the user through Settings → Connectors → Add connector → Install from local folder, where Gety shows the permission review before the config form).
    - Check status: `gety connector show <connector_id>` or `gety connector list --kind custom`.
    - Trigger sync: `gety connector poll <connector_id>`; a permission failure appears as `permission denied: ...` on the connector's row in Gety settings.
-   - After code changes, rebuild (`deno task build`) and run `gety connector restart <connector_id>`. After manifest changes (including permissions), `gety connector remove <connector_id>` and install again.
+   - After code changes, run `deno task build` and `gety connector restart <connector_id>`. If the change alters ids, doc fields, or what the state cursor skips, run `gety connector rebuild <connector_id>` instead of `poll` so stale docs are deleted. After manifest changes (including permissions), `gety connector remove <connector_id>` and install again.
    - Verify search: `gety search <query> -c "<connector_name>"`.
 
 7. Add an icon.
