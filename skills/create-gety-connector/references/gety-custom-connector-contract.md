@@ -208,14 +208,14 @@ export default class MyConnector extends Connector<ManifestConfig, State> {
 
 Lifecycle facts:
 
-- Each scheduled poll starts a fresh connector runtime process.
+- Every poll (scheduled, **More actions → Sync now**, `gety connector poll`) starts a fresh connector runtime process, which exits when the poll ends.
 - `this.config` is injected from Gety's install/config form.
 - `this.lastState` is the state Gety committed after the last poll that completed successfully, or `null`.
-- `this.signal` is aborted when the user disables or restarts the connector or Gety cancels the poll. Cancellation is cooperative first, then the process is killed after a grace period; release sockets and temp files when it aborts.
+- `this.signal` is aborted when Gety stops the connector (for example when it is disabled, restarted, reconfigured, removed, or switched to another version) or cancels a poll that went idle. Cancellation is cooperative first; a connector that has not exited after a grace period (currently 5 seconds) is killed. The runtime checks the signal between yielded batches and stops forwarding batches once it is aborted, but it cannot interrupt a long `await` inside `poll()`: pass `this.signal` to `fetch` and other long calls, check it in loops, and release sockets and temp files when it aborts. A cancelled poll commits no state.
 - `this.dataDir` is the absolute path of the persistent data folder (also the working directory). `this.homeDir` is the home directory Gety resolves `~` against, and `this.expandHome('~/x')` expands a leading `~` with it. Do not read `HOME` from the environment.
 - `onLoad` is optional and may be async.
 - Class fields do not persist across polls. Use state, or files in `this.dataDir`.
-- A poll that sends Gety nothing for 10 minutes is treated as hung and cancelled. During long work, yield batches or log a low-frequency progress line such as `console.info('still syncing...')`.
+- A poll that sends Gety nothing for 10 minutes is treated as hung and cancelled. Yielded batches and console output (forwarded to Gety as log lines) reset this timer, so during long work yield batches or log a low-frequency progress line such as `console.info('still syncing...')`; avoid high-frequency heartbeat logs. A heartbeat only proves liveness; it commits no state.
 
 The build leaves `@gety-ai/connector-sdk` external: installed connectors run against the SDK Gety ships (mapped by Gety's import map), which provides `dataDir`, `homeDir`, and `expandHome`, and Gety's runner injects `config`, `lastState`, `signal`, `dataDir`, and `homeDir`. The sample's `dev/gety-connector-sdk/mod.ts` is only a development copy that `deno.json` maps the import to for `deno task check`, tests, and the local runner; editing it changes nothing in Gety. If an older shim lacks `dataDir`, `homeDir`, and `expandHome`, add them so the connector type-checks and runs locally:
 
@@ -304,16 +304,16 @@ Prefer real source boundaries:
 
 State guidance:
 
-- Gety indexes each yielded batch as it arrives, but commits the state of the last yielded batch only after the whole poll finishes successfully. If a poll fails, the next poll starts again from the previous committed state, and some docs of the failed poll may already be indexed. Make every batch safe to replay: `upsert` by stable id converges.
+- Gety indexes each yielded batch as it arrives, but commits state only after the whole poll finishes successfully: the most recent `state` yielded (a batch without `state` keeps the previous one). If a poll fails or is cancelled, the next poll starts again from the previous committed state, and documents of that poll may already be indexed, even part of one batch, because Gety applies a batch in bounded units rather than in one transaction. Make every batch safe to replay: `upsert` by stable id converges.
 - Do not advance state before yielding the corresponding docs.
 - For high-water-mark APIs, keep enough state to avoid missing updates with equal timestamps.
 - For local sources, prefer compact fingerprints such as relative path, mtime, and size over re-reading everything.
-- Config plus state must fit the 16 MiB start frame; a poll whose next state would not fit fails and keeps the previous checkpoint. Keep state compact and put large maps in `this.dataDir`.
+- Gety checks every yielded `state` against the 16 MiB start frame of the next poll, together with the config; a state that would not fit fails the poll and the previous committed state stays. Keep state compact and put large maps in `this.dataDir`.
 
 Batching and size:
 
-- Large update batches are transmitted safely, so you can `yield` a page of docs at once.
-- Gety keeps at most 10 MB (UTF-8 bytes) of each document's `content` and truncates the rest; do not emit huge individual docs or huge metadata blobs.
+- The SDK splits a large yielded batch into frames of about 512 KiB and sends the batch's `state` with its last frame, so you can `yield` a page of docs at once.
+- A single document update whose JSON exceeds 16 MiB fails the poll (`single Deno doc update exceeds IPC frame size limit`), and so does a `state` that does not fit one 16 MiB frame. Gety keeps at most 10 MB (UTF-8 bytes) of each document's `content` and truncates the rest, but only after the document has arrived: cap huge content yourself, and do not emit huge metadata blobs.
 - Transmission safety does not lower memory use: building every doc before yielding still peaks. Stream pages instead.
 
 Sync and rebuild index:
@@ -324,7 +324,7 @@ Sync and rebuild index:
 
 What the connector must tolerate:
 
-- `lastState === null` can happen at any time and means only that there is no committed checkpoint: the index may be empty (first sync, rebuild, a version switch that resyncs) or partly filled (an earlier poll that failed before committing). Do a complete, replay-safe enumeration of every in-scope document. Do not skip items because a cache in `this.dataDir` says they were already sent; when `lastState` is `null`, discard such caches, or tie them to a value stored in the state so a cleared state invalidates them.
+- `lastState === null` can happen at any time and means only that there is no committed state: the index may be empty (first sync, rebuild, a version switch that resyncs) or partly filled (an earlier poll that failed before committing). Do a complete, replay-safe enumeration of every in-scope document. Do not skip items because a cache in `this.dataDir` says they were already sent; when `lastState` is `null`, discard such caches, or tie them to a value stored in the state so a cleared state invalidates them.
 - A failed poll is replayed from the previous state (see State guidance).
 - When a change alters ids, doc fields, the content mapping, or what the cursor skips, an incremental sync leaves stale documents behind. For an npm release, bump `sync_version` so the upgrade resyncs on its own; otherwise tell users to run **Rebuild index** (`gety connector rebuild <id>`) after updating.
 

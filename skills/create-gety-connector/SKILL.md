@@ -35,10 +35,10 @@ Check these early; if `git` or `deno` is missing, ask the user to install before
 
 4. Implement `src/index.ts`.
    - Extend `Connector<ManifestConfig, State>` and implement `async *poll()`. `ManifestConfig` is generated from the manifest's `config.fields` into `src/gen/manifest.d.ts` by `deno task generate` (also run by `check` and `build`), so add config fields to `manifest.json` and regenerate before reading them via `this.config`.
-   - Use `this.config`, `this.lastState`, and `this.signal`; `onLoad` is optional and can be async.
-   - Stream pages and `yield` real update batches as they are fetched. Gety commits the state only after the whole poll succeeds, so every batch must be safe to replay.
+   - Use `this.config`, `this.lastState`, and `this.signal`; `onLoad` is optional and can be async. Pass `this.signal` to `fetch` and other long calls and check it in loops: Gety aborts it when it stops the connector, cannot interrupt a pending `await`, and kills the process after a short grace period.
+   - Stream pages and `yield` real update batches as they are fetched. Gety commits the most recent yielded `state` only after the whole poll succeeds, and a failed poll may already have indexed part of a batch, so every batch must be safe to replay.
    - Do not rely on class fields for cross-poll cache; each poll is a fresh runtime process. Persist caches in `this.dataDir`; use the per-sync temp folder (`Deno.makeTempDir()`) for scratch files.
-   - Treat `lastState === null` as "no committed checkpoint" and do a complete, replay-safe enumeration: a **Rebuild index** deletes every doc and restarts from `null` while `this.dataDir` survives, and a first sync that failed may have left docs behind. Never skip items because a `dataDir` cache says they were already sent.
+   - Treat `lastState === null` as "no committed state" and do a complete, replay-safe enumeration: a **Rebuild index** deletes every doc and restarts from `null` while `this.dataDir` survives, and a first sync that failed may have left docs behind. Never skip items because a `dataDir` cache says they were already sent.
    - Resolve `~` paths with `this.homeDir` / `this.expandHome()`, never `HOME` from the environment.
    - Let the build bundle every dependency into the entry; only `@gety-ai/connector-sdk` (Gety supplies its own SDK at run time) and `node:*` built-ins stay external. Sandboxed connectors cannot import `npm:`, `jsr:`, or `https:` modules at run time.
 
