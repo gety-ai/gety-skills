@@ -60,6 +60,8 @@ Parse the user's natural language query and map it to gety CLI flags:
 | Restart connector | → `gety connector restart <id>` |
 | Sync / poll connector | → `gety connector poll <id>` |
 | Rebuild connector index from scratch | → `gety connector rebuild <id>` ⚠️ deletes the connector's documents; confirm with user first |
+| Check custom connectors for updates | → `gety connector outdated` (npm-installed connectors only) |
+| Update or switch a custom connector's version | → `gety connector update <id> --dry-run [--version <version>]`, show the preview to the user, then replace `--dry-run` with `--yes` once the user approves ⚠️ a downgrade, or a release that changed its sync format or indexed fields, deletes the connector's documents and syncs again |
 | Enable / disable connector | → `gety connector enable <id>` / `gety connector disable <id>` |
 | Remove data source | → `gety connector remove <id>` ⚠️ confirm with user first |
 
