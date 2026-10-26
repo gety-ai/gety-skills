@@ -316,7 +316,7 @@ Batching and size:
 
 Sync and rebuild index:
 
-- **Sync** (scheduled syncs, **Sync now**, `gety connector poll <id>`) is incremental and starts from `lastState`.
+- **Sync** (scheduled syncs, the row's **More actions → Sync now**, `gety connector poll <id>`) is incremental and starts from `lastState`.
 - **Rebuild index** (the row's **More actions → Rebuild index**, `gety connector rebuild <id>`, and Gety's global **Clean up & rebuild**) deletes every document of the connector, clears `lastState` and the last sync time, then syncs right away with `lastState === null`. The request is persisted: if Gety quits, the connector is disabled, or it fails to start before the delete completes, the rebuild finishes on the next start. A disabled connector refuses it with `not_running`.
 - A rebuild does not clear `this.dataDir`; only uninstalling (or reinstalling) does.
 
@@ -392,7 +392,7 @@ dev/runs/<timestamp>/
 
 The content file is `.md` for `content_format: "markdown"` and `.txt` otherwise (omitted when the doc has no content); the `.json` sidecar is always written.
 
-Check whether the sample's runner enforces the sandbox before trusting it: if `deno task runner` runs `deno run -A` and the runner only injects `config`, `lastState`, and `signal`, it does not apply `permissions` and leaves `dataDir`/`homeDir` empty. Then a missing permission only shows up after installing in Gety: poll the connector; `gety connector show <id>` reports `retrying` or `stopped` with a short code (`retrying`, `runtime_error`), and the connector's row in Gety's Custom Connectors settings shows the full message, e.g. `permission denied: net access to "api.example.com:443" is not granted by the connector's manifest`.
+Check whether the sample's runner enforces the sandbox before trusting it: if `deno task runner` runs `deno run -A` and the runner only injects `config`, `lastState`, and `signal`, it does not apply `permissions` and leaves `dataDir`/`homeDir` empty. Then a missing permission only shows up after installing in Gety: poll the connector; `gety connector show <id>` reports `retrying` or `stopped` with a short code (`retrying`, `runtime_error`), and the connector's row in Gety's **Settings → Connectors** shows the full message, e.g. `permission denied: net access to "api.example.com:443" is not granted by the connector's manifest`.
 
 ## Gety Installation and Lifecycle
 
@@ -451,15 +451,15 @@ You can manage custom connectors either via Gety CLI (`gety connector`) or throu
 
 ### UI Workflow
 
-1. Open **Gety → Settings → Connectors**, choose **Add connector → Install from local folder**, and select the connector folder.
-2. Gety shows the permission review first: the connector card, then the grants grouped as network / read files / environment variables / run programs. High-risk and full-access connectors need an extra confirmation in the app.
+1. Open **Gety → Settings → Connectors**, click **Install from local folder** under **Install Connector**, and select the connector folder.
+2. Gety shows the permission review first: the connector card, then the grants grouped as **Network**, **File System Read**, **Environment Variables**, and **Run Programs**. High-risk and full-access connectors need an extra confirmation in the app.
 3. Fill in the configuration fields; Gety installs and starts indexing in the background. Cancelling at any step installs nothing.
-4. Each row has a permissions button that shows the permissions in effect, **Sync now**, and **More actions → Rebuild index** (enabled connectors only).
-5. After code edits, run `deno task build` and click **Restart**; after manifest edits, remove and reinstall.
+4. Each loaded connector's row in **Installed Connectors** has a **Permissions** button that shows the permissions in effect, **Configure**, and a **More actions** menu: **Sync now** (enabled connectors that are running and not already syncing), **Restart** (enabled connectors only), **Manage versions** (npm installs only), **Rebuild index** (enabled connectors only), and **Delete**. A connector Gety can't load shows a direct **Delete** button instead.
+5. After code edits, run `deno task build` and choose **More actions → Restart**; after manifest edits, choose **More actions → Delete** (or the direct **Delete** button of a connector Gety can't load) and install the connector again.
 
 ## Publishing
 
-Users install a published connector with **Add connector → Install from remote** in the app, or with `gety connector install --github …` / `--npm …`. In both cases Gety:
+Users install a published connector with the **Install from remote** card in **Settings → Connectors**, or with `gety connector install --github …` / `--npm …`. In both cases Gety:
 
 - never builds from source: it installs the packaged files and keeps its own copy of the code (deleted on `remove`);
 - shows the permissions from a small metadata download (the `manifest.json` asset, or the registry metadata of that npm version) before the user confirms, then fetches that metadata again, downloads the package, and checks it: the `id` and `version` must match what the user reviewed, the permissions (with the config fields they reference) must have the same fingerprint as in the review (else `permissions_changed`), and the package's manifest must match the metadata fetched at commit time (GitHub: byte-for-byte; npm: the `gety` object equal as JSON). Other manifest fields are not pinned to the preview;
