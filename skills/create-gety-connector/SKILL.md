@@ -1,6 +1,6 @@
 ---
 name: create-gety-connector
-description: Turn any data source — an API, SaaS app, database, or local files — into searchable Gety documents with a custom connector built from the gety-sample-connector template. Use when the user wants to create, adapt, review, or publish a Gety custom connector — manifest.json, sandbox permissions, config fields, doc_link, the @gety-ai/connector-sdk poll()/onLoad lifecycle, incremental sync, validating with the local runner, gety connector install, and gety search, and publishing via GitHub Releases or npm.
+description: Turn any data source — an API, SaaS app, database, or local files — into searchable Gety documents with a custom connector built from the gety-sample-connector template. Use when the user wants to create, adapt, review, or publish a Gety custom connector — manifest.json, sandbox permissions, config fields, doc_link, the @gety-ai/connector-sdk poll()/onLoad lifecycle, incremental sync, validating with the local runner, gety connector install, and gety search, publishing via GitHub Releases or npm, releasing npm updates, and listing it among Gety's community connectors.
 ---
 
 # Create Gety Connector
@@ -43,6 +43,7 @@ Check these early; if `git` or `deno` is missing, ask the user to install before
    - Let the build bundle every dependency into the entry; only `@gety-ai/connector-sdk` (Gety supplies its own SDK at run time) and `node:*` built-ins stay external. Sandboxed connectors cannot import `npm:`, `jsr:`, or `https:` modules at run time.
 
 5. Update `manifest.json`.
+   - Choose the manifest `id` once: prefix it with your own name (`acme-linear`, not `linear`) and never change it after publishing. Gety identifies installs by it, so a new id installs as a second connector and existing users cannot update to it.
    - Keep `entry` pointed at the build output, usually `dist/main.js`.
    - `capabilities` is required and non-empty; a polling/indexing data source must declare `["data-source"]`.
    - Declare minimal `permissions` (`net`, `read`, `env`, `run`, `{ "config_field": ... }`) and set `min_gety_app_version` to at least `0.6.6`. Omitting `permissions` runs the connector without a sandbox behind a red full-access warning; use `{}` if it needs nothing beyond base access.
@@ -70,10 +71,11 @@ Check these early; if `git` or `deno` is missing, ask the user to install before
 
 8. Publish (only when the user asks).
    - GitHub Releases: one Release per version, tag = manifest `version` (optional `v`), assets `manifest.json` + `<id>-<version>.zip` built by the sample's `deno task package`; push a `v*` tag to run the sample's release workflow.
-   - npm: `package.json` carries the whole manifest in `gety`, `gety.version` equals the package `version`, and `files` lists the entry, every runtime file, and `CHANGELOG.md` (npm skips it once `files` is set; Gety shows its sections as release notes). A published version can never be republished, so its permissions are final.
+   - npm: `package.json` carries the whole manifest in `gety`, `gety.version` equals the package `version`, and `files` lists the entry, every runtime file, and `CHANGELOG.md` (npm skips it once `files` is set; Gety shows its sections as release notes). A published version can never be republished, so its permissions are final. Set `homepage` explicitly to the connector's documentation: the **View documentation** link in the install review and in the installed connector's **Configure** dialog opens it (GitHub installs link to the Release page).
    - Test a published version as users get it: publish a pre-release first (GitHub pre-release, or `npm publish --tag next`), remove the local-folder install of the same id, then run `gety connector install --github <owner/repo> --version <tag> --dry-run` or `--npm <name>@<version> --dry-run`, install, and check `origin`/`digest` in `gety connector show`.
    - Updates exist only for npm installs: Gety offers the highest newer version that is not a pre-release, not deprecated, and runs on the user's Gety, and users can switch to any version (`gety connector outdated`, `gety connector update`). Keep `## <version>` sections in `CHANGELOG.md`, bump manifest `sync_version` when a release cannot continue from what an older one synced, and withdraw a broken release with `npm deprecate` rather than moving `latest`. Check an upgrade with `gety connector update <connector_id> --version <new> --dry-run` from the previous version.
-   - Read the Publishing section of the reference for package limits, pre-release handling, the npmmirror delay, and versions and updates.
+   - Featured listing: to appear under **Community** in Gety's **Featured connectors**, publish to npm, then open a pull request to `gety-ai/gety-connectors` adding `community/<id>.json` (`package`, exact `version`, `author.github`) as https://github.com/gety-ai/gety-connectors/blob/main/CONTRIBUTING.md describes. Gety installs exactly the registered version; listing a newer one takes another pull request.
+   - Read the Publishing section of the reference for package limits, pre-release handling, the npmmirror delay, versions and updates, and the featured listing.
 
 ## Anti-Patterns
 
@@ -84,6 +86,7 @@ Check these early; if `git` or `deno` is missing, ask the user to install before
 - Do not read `this.config`, `this.lastState`, `this.signal`, `this.dataDir`, or `this.homeDir` from the class constructor — the host injects them after construction, so in the constructor they are still defaults (`config` `{}`, `lastState` `null`, `dataDir`/`homeDir` `""`, a `signal` that never aborts). Read them in `onLoad` or `poll`.
 - Do not edit generated `dist/main.js` by hand; edit `src/index.ts` and rebuild.
 - Do not request `"*"`, `*.com`, `"~"`, or `run` just to make a permission error go away; add the exact host or folder that failed.
+- Do not change the manifest `id` of a published connector; publish fixes under the same id.
 - Do not pass password fields with `--set`; Gety rejects them. Use `--secret` or `--secret-file`.
 
 ## Reference
