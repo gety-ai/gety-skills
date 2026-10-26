@@ -70,9 +70,10 @@ Check these early; if `git` or `deno` is missing, ask the user to install before
 
 8. Publish (only when the user asks).
    - GitHub Releases: one Release per version, tag = manifest `version` (optional `v`), assets `manifest.json` + `<id>-<version>.zip` built by the sample's `deno task package`; push a `v*` tag to run the sample's release workflow.
-   - npm: `package.json` carries the whole manifest in `gety`, `gety.version` equals the package `version`, and `files` lists the entry, every runtime file, and `CHANGELOG.md` if there is one (npm skips it once `files` is set). A published version can never be republished, so its permissions are final.
+   - npm: `package.json` carries the whole manifest in `gety`, `gety.version` equals the package `version`, and `files` lists the entry, every runtime file, and `CHANGELOG.md` (npm skips it once `files` is set; Gety shows its sections as release notes). A published version can never be republished, so its permissions are final.
    - Test a published version as users get it: publish a pre-release first (GitHub pre-release, or `npm publish --tag next`), remove the local-folder install of the same id, then run `gety connector install --github <owner/repo> --version <tag> --dry-run` or `--npm <name>@<version> --dry-run`, install, and check `origin`/`digest` in `gety connector show`.
-   - Read the Publishing section of the reference for package limits, pre-release handling, and the npmmirror delay.
+   - Updates exist only for npm installs: Gety offers the highest newer version that is not a pre-release, not deprecated, and runs on the user's Gety, and users can switch to any version (`gety connector outdated`, `gety connector update`). Keep `## <version>` sections in `CHANGELOG.md`, bump manifest `sync_version` when a release cannot continue from what an older one synced, and withdraw a broken release with `npm deprecate` rather than moving `latest`. Check an upgrade with `gety connector update <connector_id> --version <new> --dry-run` from the previous version.
+   - Read the Publishing section of the reference for package limits, pre-release handling, the npmmirror delay, and versions and updates.
 
 ## Anti-Patterns
 

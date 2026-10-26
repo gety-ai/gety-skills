@@ -13,7 +13,7 @@
 - Remote files
 - Validation workflow
 - Gety installation and lifecycle
-- Publishing (GitHub Releases, npm)
+- Publishing (GitHub Releases, npm, versions and updates)
 
 ## Project Layout
 
@@ -90,6 +90,7 @@ Rules:
 - `config.fields[].type` can be `text`, `password`, `number`, `checkbox`, `dropdown`, or `directory`.
 - Dropdown fields require ordered `options: [{ "value": "...", "label": "..." }]`.
 - `permissions` is described in the next section. It may be omitted but never set to `null`.
+- `sync_version` is optional: a positive whole number (1 when absent) for the format of what the connector syncs. Bump it when a release cannot continue from what an older release synced; see Versions and Updates.
 - Unknown fields are rejected. `mode`, dynamic hooks, and per-doc links are not supported; do not add them.
 - `schema.extra_gety_indexed_fields` makes extra `metadata` keys searchable (Gety already indexes `title` and `content`). Each entry needs both `field` and `strategy`, e.g. `"schema": { "extra_gety_indexed_fields": [{ "field": "status", "strategy": "fast_text" }] }`. Choose `strategy` by how the field should match:
   - `fast_text` — in-memory index for fast exact / substring / fuzzy (and pinyin) matching on short values. Best for titles, names, tags, folders, statuses, and similar short metadata.
@@ -318,13 +319,13 @@ Sync and rebuild index:
 
 - **Sync** (scheduled syncs, the row's **More actions → Sync now**, `gety connector poll <id>`) is incremental and starts from `lastState`.
 - **Rebuild index** (the row's **More actions → Rebuild index**, `gety connector rebuild <id>`, and Gety's global **Clean up & rebuild**) deletes every document of the connector, clears `lastState` and the last sync time, then syncs right away with `lastState === null`. The request is persisted: if Gety quits, the connector is disabled, or it fails to start before the delete completes, the rebuild finishes on the next start. A disabled connector refuses it with `not_running`.
-- A rebuild does not clear `this.dataDir`; only uninstalling (or reinstalling) does.
+- A rebuild does not clear `this.dataDir`, and neither does switching versions; only uninstalling (or reinstalling) does.
 
 What the connector must tolerate:
 
-- `lastState === null` can happen at any time and means only that there is no committed checkpoint: the index may be empty (first sync, rebuild) or partly filled (an earlier poll that failed before committing). Do a complete, replay-safe enumeration of every in-scope document. Do not skip items because a cache in `this.dataDir` says they were already sent; when `lastState` is `null`, discard such caches, or tie them to a value stored in the state so a cleared state invalidates them.
+- `lastState === null` can happen at any time and means only that there is no committed checkpoint: the index may be empty (first sync, rebuild, a version switch that resyncs) or partly filled (an earlier poll that failed before committing). Do a complete, replay-safe enumeration of every in-scope document. Do not skip items because a cache in `this.dataDir` says they were already sent; when `lastState` is `null`, discard such caches, or tie them to a value stored in the state so a cleared state invalidates them.
 - A failed poll is replayed from the previous state (see State guidance).
-- When a change alters ids, doc fields, the content mapping, or what the cursor skips, an incremental sync leaves stale documents behind: tell users to run **Rebuild index** (`gety connector rebuild <id>`) after updating.
+- When a change alters ids, doc fields, the content mapping, or what the cursor skips, an incremental sync leaves stale documents behind. For an npm release, bump `sync_version` so the upgrade resyncs on its own; otherwise tell users to run **Rebuild index** (`gety connector rebuild <id>`) after updating.
 
 ## Remote Files
 
@@ -471,7 +472,7 @@ Rules shared by both sources:
 - Limits: at most 100 MiB packed, 20,000 files and 500 MiB unpacked; no symbolic or hard links.
 - Public sources only; Gety sends no tokens.
 - One install per manifest id. Prefix `id` with your own name (`acme-linear`, not `linear`): a connector with the same id cannot be installed next to yours. Remove a local-folder install of the same id before installing the published one (otherwise `already_installed`); switching source means remove and install again.
-- Raising `min_gety_app_version` does not strand users: older Gety reports `version_incompatible`, and the user can still install an older version by naming it.
+- Raising `min_gety_app_version` does not strand users: older Gety reports `version_incompatible`, the user can still install an older version by naming it, and update checks skip versions the user's Gety cannot run.
 - Publishing to both: keep `manifest.json` as the single source and generate the `gety` object in `package.json` from it in the packaging step.
 
 ### GitHub Releases
@@ -517,7 +518,7 @@ The package's `package.json` carries the complete manifest in a `gety` object:
 
 - `gety` is the whole manifest; a `manifest.json` in the package is not read. Paths in it (`entry`, `icon`) are relative to the package root.
 - `gety.version` must equal the package `version` (SemVer, including pre-release and build metadata), otherwise `invalid_package`.
-- `files` must include the entry and every runtime file. List `CHANGELOG.md` too if you keep one: npm does not pack it on its own once `files` is set (Gety does not require it). Check with `npm pack --dry-run` before publishing.
+- `files` must include the entry and every runtime file. List `CHANGELOG.md` too: npm does not pack it on its own once `files` is set, and Gety shows its sections as release notes (see Versions and Updates). Check with `npm pack --dry-run` before publishing.
 - Gety installs the version the `latest` dist-tag points to, or an exact version the user names (`@acme/gety-linear@1.3.0-beta.1`, `--version 1.3.0-beta.1`, or `https://www.npmjs.com/package/@acme/gety-linear/v/1.3.0-beta.1`). Other dist-tags and ranges are not supported, so publish pre-releases under a non-`latest` tag (`npm publish --tag next`) to keep `latest` stable.
 - npm never lets a version be republished, so a version's permissions are fixed once published; changing them means publishing a new version.
 - The registry must list a `sha512` integrity for the tarball, and the tarball may contain only regular files and directories under `package/`.
@@ -529,3 +530,22 @@ gety connector install --npm @acme/gety-linear@1.2.0 --yes
 ```
 
 Errors: `invalid_npm_input`, `package_not_found` (no such public package or version on any registry tried), plus `source_unavailable`, `version_incompatible`, `invalid_package` as for GitHub.
+
+### Versions and Updates
+
+Only npm installs have version management. GitHub and local-folder installs get no update checks, and `gety connector update` refuses them with `capability_not_supported`; moving them to another version means removing the connector and installing it again.
+
+- Gety checks every npm-installed connector for a newer version each time the user opens **Settings → Connectors**, on **Check for updates**, and with `gety connector outdated`. It never updates on its own.
+- The update it offers is the highest version that is newer than the installed one, not a pre-release, not deprecated, and runs on the user's Gety (its `min_gety_app_version` is not newer than the app). The `latest` dist-tag plays no part. The row's **More actions** button then shows a dot and the tooltip `Update <version> available`.
+- Users can switch to any published version, newer or older, in **More actions → Manage versions** (**Switch to this version**) or with `gety connector update <id> [--version <version>]`. The list labels versions `Pre-release`, `Deprecated`, or `Needs Gety <version>`; pre-releases and deprecated versions can still be chosen explicitly, versions that need a newer Gety cannot.
+- Release notes: Gety shows the section of the package's root `CHANGELOG.md` for the selected version, split by version headings (`## 1.2.0`, `## v1.2.0`, and `## [1.2.0] - 2026-07-14` all work; use one heading level for every version). A section ends at the next heading of the same or a higher level; a non-version heading such as `## Unreleased` is not shown, nor is its content, and a `---` line after a blank line counts as such a heading. An upgrade reads the notes from the new version's package, anything else from the installed copy, so keep the sections of older versions. changesets writes this format. Only the first 1 MiB is shown.
+- `sync_version` (manifest, whole number, 1 when absent) is the format version of what the connector has synced: its state, its document ids, and the content of its documents. Bump it in a release that cannot continue from what an older release synced (the state changes shape, document ids change); upgrading to it then deletes the connector's documents, clears its state, and syncs from scratch. Changing `schema.extra_gety_indexed_fields` does the same without a bump, and every downgrade always does it. A manifest that sets `sync_version` needs `min_gety_app_version` `0.6.6` or later, like `permissions`.
+- What carries over: `this.dataDir` and `localStorage` are kept across versions, and the state is cleared only when the switch resyncs. Settings carry over field by field: a field that keeps its `id` and type keeps the user's value (secrets included); a field whose type changes is reset to its new default, a removed field is dropped, and a new field starts at its default. When a required field ends up empty or a value is not among the new options, the user fills it in before switching. A switch asks the user to review only the permissions the new version adds.
+- Withdraw a broken version with `npm deprecate <package>@<version> "<message>"`: a deprecated version is never offered as an update; users still see it, marked as deprecated with your message, and can choose it explicitly. Pointing `latest` back at an older version does not withdraw a newer one.
+- Test an upgrade as users get it: install the previous published version (`gety connector install --npm <package>@<old> --yes`), let it sync, then run `gety connector update <id> --version <new> --dry-run` and check what it reports (resync, settings to fill in, new permissions) before switching.
+
+```bash
+gety connector outdated
+gety connector update <connector_id> --dry-run
+gety connector update <connector_id> --version 1.1.0 --yes
+```
