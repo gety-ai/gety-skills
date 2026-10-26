@@ -55,7 +55,7 @@ Minimal manifest:
   "id": "my_connector",
   "name": "My Connector",
   "version": "0.1.0",
-  "min_gety_app_version": "0.7.0",
+  "min_gety_app_version": "0.6.6",
   "capabilities": ["data-source"],
   "entry": "dist/main.js",
   "description": "Indexes documents from My Connector.",
@@ -79,7 +79,7 @@ Minimal manifest:
 Rules:
 
 - `id` must match `^[a-z0-9][a-z0-9_-]*$`: start with a lowercase letter or digit, then lowercase letters, digits, `_`, or `-` (no leading `_`/`-`, no uppercase, no dots). Keep it stable, and for a connector others will install, prefix it with your own name (`acme-linear`, not `linear`): two connectors with the same id cannot be installed side by side. A custom connector id cannot replace a built-in connector type.
-- `version` and `min_gety_app_version` are SemVer. A manifest that declares `permissions` must set `min_gety_app_version` to `0.7.0` or later, otherwise it is invalid; this makes older Gety versions refuse the connector instead of running it without a sandbox.
+- `version` and `min_gety_app_version` are SemVer. Gety refuses a connector whose `min_gety_app_version` is newer than itself (GitHub and npm installs report `version_incompatible`). A manifest that declares `permissions` must set `min_gety_app_version` to `0.6.6` or later, the first Gety release with the sandbox: every older Gety then reports that the connector needs a newer Gety instead of running it without a sandbox or failing on an unknown field.
 - `capabilities` is a required non-empty array declaring which host integration points the connector participates in. A polling/indexing data source must declare `["data-source"]` (currently the only supported value); unknown values are rejected. Capabilities are host features, not sandbox permissions.
 - `entry` and `icon` must be relative paths inside the connector root. `icon` is optional (a PNG or SVG in the connector root) and is shown in Gety's connector list and install dialog.
 - `schedule` declares the update strategy. Supported shapes:
@@ -506,7 +506,7 @@ The package's `package.json` carries the complete manifest in a `gety` object:
     "id": "acme-linear",
     "name": "Acme Linear",
     "version": "1.2.0",
-    "min_gety_app_version": "0.7.0",
+    "min_gety_app_version": "0.6.6",
     "entry": "dist/main.js",
     "icon": "icon.svg",
     "capabilities": ["data-source"],
