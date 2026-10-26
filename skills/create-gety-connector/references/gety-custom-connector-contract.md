@@ -286,6 +286,7 @@ Resolution rules:
 - Missing, empty, or non-string values mean the doc has no link.
 - URL links open in the browser; Gety does not fetch URL content.
 - File links must be stable local filesystem paths of the user's own files. Do not point them at temporary cache files.
+- A `file:` URL must name a local path (`file:///Users/me/notes.md`). Gety does not open a `file:` URL with a host (`file://server/share/notes.md`), and on Windows it does not open links to network shares either.
 - Gety refuses to open a link (file link, `file:` URL, or local path) that points into any connector's folders — its data and temp folders, Gety's connector directory, or the connector's code folder — or to a file that does not exist. "Show in folder" still works. So never write files into `this.dataDir` or the temp folder and link to them; link to the upstream service or to the user's files.
 
 Preview/icon implications:
