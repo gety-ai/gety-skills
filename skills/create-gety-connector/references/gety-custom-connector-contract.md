@@ -432,7 +432,7 @@ You can manage custom connectors either via Gety CLI (`gety connector`) or throu
    ```bash
    gety connector rebuild <connector_id>
    ```
-   Deletes the connector's documents and syncs again from `lastState === null`, without asking for confirmation; also returns `accepted` immediately. Use it after changes that alter ids, fields, or what the state cursor skips. Needs a Gety CLI protocol v7 build.
+   Deletes the connector's documents and syncs again from `lastState === null`, without asking for confirmation; also returns `accepted` immediately. Use it after changes that alter ids, fields, or what the state cursor skips.
 
 5. **Reconfigure**:
    ```bash
