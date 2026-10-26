@@ -13,7 +13,7 @@
 - Remote files
 - Validation workflow
 - Gety installation and lifecycle
-- Publishing (GitHub Releases, npm, versions and updates)
+- Publishing (GitHub Releases, npm, versions and updates, featured listing)
 
 ## Project Layout
 
@@ -78,7 +78,8 @@ Minimal manifest:
 
 Rules:
 
-- `id` must match `^[a-z0-9][a-z0-9_-]*$`: start with a lowercase letter or digit, then lowercase letters, digits, `_`, or `-` (no leading `_`/`-`, no uppercase, no dots). Keep it stable, and for a connector others will install, prefix it with your own name (`acme-linear`, not `linear`): two connectors with the same id cannot be installed side by side. A custom connector id cannot replace a built-in connector type.
+- `id` must match `^[a-z0-9][a-z0-9_-]*$`: start with a lowercase letter or digit, then lowercase letters, digits, `_`, or `-` (no leading `_`/`-`, no uppercase, no dots). For a connector others will install, prefix it with your own name (`acme-linear`, not `linear`): two connectors with the same id cannot be installed side by side. A custom connector id cannot replace a built-in connector type.
+- Never change the `id` of a published connector. Gety identifies an install by its manifest id: a release with a new id installs as a second connector that indexes everything again, and existing users cannot update to it (in the same npm package it is still offered as their update, but switching refuses a version whose id differs).
 - `version` and `min_gety_app_version` are SemVer. Gety refuses a connector whose `min_gety_app_version` is newer than itself (GitHub and npm installs report `version_incompatible`). A manifest that declares `permissions` must set `min_gety_app_version` to `0.6.6` or later, the first Gety release with the sandbox: every older Gety then reports that the connector needs a newer Gety instead of running it without a sandbox or failing on an unknown field.
 - `capabilities` is a required non-empty array declaring which host integration points the connector participates in. A polling/indexing data source must declare `["data-source"]` (currently the only supported value); unknown values are rejected. Capabilities are host features, not sandbox permissions.
 - `entry` and `icon` must be relative paths inside the connector root. `icon` is optional (a PNG or SVG in the connector root) and is shown in Gety's connector list and install dialog.
@@ -471,7 +472,8 @@ Rules shared by both sources:
 - The package contains the built entry and every file the connector needs at run time (icon, source map, data files). Build output goes into the package; it does not have to be committed.
 - Limits: at most 100 MiB packed, 20,000 files and 500 MiB unpacked; no symbolic or hard links.
 - Public sources only; Gety sends no tokens.
-- One install per manifest id. Prefix `id` with your own name (`acme-linear`, not `linear`): a connector with the same id cannot be installed next to yours. Remove a local-folder install of the same id before installing the published one (otherwise `already_installed`); switching source means remove and install again.
+- One install per manifest id, and the id never changes once published (see Manifest Rules). Prefix `id` with your own name (`acme-linear`, not `linear`): a connector with the same id cannot be installed next to yours. Remove a local-folder install of the same id before installing the published one (otherwise `already_installed`); switching source means remove and install again.
+- The install review and an installed connector's **Configure** dialog show a **View documentation** link next to the source: for GitHub the Release page of the installed tag; for npm the version's `homepage` when it is an http(s) URL, otherwise the version's npmjs.com page; none for a local folder. Make that page explain what the connector indexes and why it needs its permissions.
 - Raising `min_gety_app_version` does not strand users: older Gety reports `version_incompatible`, the user can still install an older version by naming it, and update checks skip versions the user's Gety cannot run.
 - Publishing to both: keep `manifest.json` as the single source and generate the `gety` object in `package.json` from it in the packaging step.
 
@@ -502,6 +504,7 @@ The package's `package.json` carries the complete manifest in a `gety` object:
 {
   "name": "@acme/gety-linear",
   "version": "1.2.0",
+  "homepage": "https://github.com/acme/gety-linear#readme",
   "files": ["dist/main.js", "dist/main.js.map", "icon.svg", "CHANGELOG.md"],
   "gety": {
     "id": "acme-linear",
@@ -518,6 +521,7 @@ The package's `package.json` carries the complete manifest in a `gety` object:
 
 - `gety` is the whole manifest; a `manifest.json` in the package is not read. Paths in it (`entry`, `icon`) are relative to the package root.
 - `gety.version` must equal the package `version` (SemVer, including pre-release and build metadata), otherwise `invalid_package`.
+- Set `homepage` (http or https) in `package.json` to the connector's documentation; **View documentation** opens it. Set it explicitly: npm derives a homepage from `repository` only in the registry metadata the install review reads, not in the packed `package.json` the **Configure** dialog reads, so without it the installed connector links to its npmjs.com page instead.
 - `files` must include the entry and every runtime file. List `CHANGELOG.md` too: npm does not pack it on its own once `files` is set, and Gety shows its sections as release notes (see Versions and Updates). Check with `npm pack --dry-run` before publishing.
 - Gety installs the version the `latest` dist-tag points to, or an exact version the user names (`@acme/gety-linear@1.3.0-beta.1`, `--version 1.3.0-beta.1`, or `https://www.npmjs.com/package/@acme/gety-linear/v/1.3.0-beta.1`). Other dist-tags and ranges are not supported, so publish pre-releases under a non-`latest` tag (`npm publish --tag next`) to keep `latest` stable.
 - npm never lets a version be republished, so a version's permissions are fixed once published; changing them means publishing a new version.
@@ -549,3 +553,14 @@ gety connector outdated
 gety connector update <connector_id> --dry-run
 gety connector update <connector_id> --version 1.1.0 --yes
 ```
+
+### Featured Connectors (Community Listing)
+
+The **Featured connectors** card in **Settings → Connectors** opens a dialog with two tabs, **Official** (the connectors in [gety-ai/gety-connectors](https://github.com/gety-ai/gety-connectors)) and **Community** (connectors published by anyone and registered there). To list a connector under **Community**, follow [CONTRIBUTING.md](https://github.com/gety-ai/gety-connectors/blob/main/CONTRIBUTING.md):
+
+- Publish it to npm first (GitHub Releases cannot be listed) and install `<package>@<version>` in Gety to check that it works.
+- Open a pull request that adds `community/<id>.json`, named after the manifest `id`, with exactly these fields: `{ "package": "@acme/gety-jira", "version": "1.2.0", "author": { "github": "acme" } }`. `version` is exact, not a range or a dist-tag.
+- The listing shows the `name` and the first line of the `description` of that version's `gety` manifest, its `icon` read from that version's tarball (SVG, PNG, or WebP, with size limits in CONTRIBUTING.md), the npm publish time, and the GitHub avatar and `@name` of `author.github`. To change any of it, publish a new version and register it.
+- The pull request check (`deno task community:check` in that repository) verifies the registration, the package and version on npm, that `gety.id` equals the file name and `gety.version` the registered version, the tarball and icon, and that the GitHub user exists. Maintainers review the registered version; connectors may use full access, and the install review shows its warning as for any connector.
+- Gety installs exactly the registered version, with the usual permission review. After that it is an ordinary npm install: update checks and switching are not limited to the registered version.
+- Publishing a newer version to npm does not change the listing; open a pull request that changes `version`. Deleting the registration removes the listing; installed copies keep working.
