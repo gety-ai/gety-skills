@@ -9,7 +9,7 @@ description: Turn any data source — an API, SaaS app, database, or local files
 
 - `git` — to clone the sample repo.
 - `deno` — the sample builds, tests, and runs entirely via `deno task` (no Node needed). Often not pre-installed; check `deno --version` and point the user to https://deno.com if missing.
-- Gety desktop app installed with CLI integration enabled — not required to build or test the connector, only to install it and verify with `gety connector` / `gety search` / `gety doc`. Sandboxed connectors (manifest `permissions`), GitHub/npm installs, and version updates need Gety 0.6.6 or later.
+- Gety desktop app installed with CLI integration enabled — not required to build or test the connector, only to install it and verify with `gety connector` / `gety search` / `gety doc`. Sandboxed connectors (manifest `permissions`), GitHub/npm installs, and version updates need Gety 0.7.0 or later.
 
 Check these early; if `git` or `deno` is missing, ask the user to install before coding.
 
@@ -46,7 +46,7 @@ Check these early; if `git` or `deno` is missing, ask the user to install before
    - Choose the manifest `id` once: prefix it with your own name (`acme-linear`, not `linear`) and never change it after publishing. Gety identifies installs by it, so a new id installs as a second connector and existing users cannot update to it.
    - Keep `entry` pointed at the build output, usually `dist/main.js`.
    - `capabilities` is required and non-empty; a polling/indexing data source must declare `["data-source"]`.
-   - Declare minimal `permissions` (`net`, `read`, `env`, `run`, `{ "config_field": ... }`) and set `min_gety_app_version` to at least `0.6.6`. Omitting `permissions` runs the connector without a sandbox behind a red full-access warning; use `{}` if it needs nothing beyond base access.
+   - Declare minimal `permissions` (`net`, `read`, `env`, `run`, `{ "config_field": ... }`) and set `min_gety_app_version` to at least `0.7.0`. Omitting `permissions` runs the connector without a sandbox behind a red full-access warning; use `{}` if it needs nothing beyond base access.
    - Avoid high-risk grants (`run`, `"*"` or `*.com`-style wildcards in `net`, `"~"` in `read`); the desktop app makes users confirm them twice and the CLI flags them with `!` lines.
    - `schedule` supports `{ "strategy": "manual" }`, `{ "strategy": "interval", "interval_seconds": <n> }`, or `{ "strategy": "daily", "time": "HH:mm" }`; omit it for Gety's default.
    - Use lowercase/snake_case author-facing fields and valid config field types.
