@@ -55,7 +55,7 @@ Minimal manifest:
   "id": "my_connector",
   "name": "My Connector",
   "version": "0.1.0",
-  "min_gety_app_version": "0.6.6",
+  "min_gety_app_version": "0.7.0",
   "capabilities": ["data-source"],
   "entry": "dist/main.js",
   "description": "Indexes documents from My Connector.",
@@ -80,7 +80,7 @@ Rules:
 
 - `id` must match `^[a-z0-9][a-z0-9_-]*$`: start with a lowercase letter or digit, then lowercase letters, digits, `_`, or `-` (no leading `_`/`-`, no uppercase, no dots). For a connector others will install, prefix it with your own name (`acme-linear`, not `linear`): two connectors with the same id cannot be installed side by side. A custom connector id cannot replace a built-in connector type.
 - Never change the `id` of a published connector. Gety identifies an install by its manifest id: a release with a new id installs as a second connector that indexes everything again, and existing users cannot update to it (in the same npm package it is still offered as their update, but switching refuses a version whose id differs).
-- `version` and `min_gety_app_version` are SemVer. Gety refuses a connector whose `min_gety_app_version` is newer than itself (GitHub and npm installs report `version_incompatible`). A manifest that declares `permissions` must set `min_gety_app_version` to `0.6.6` or later, the first Gety release with the sandbox: every older Gety then reports that the connector needs a newer Gety instead of running it without a sandbox or failing on an unknown field.
+- `version` and `min_gety_app_version` are SemVer. Gety refuses a connector whose `min_gety_app_version` is newer than itself (GitHub and npm installs report `version_incompatible`). A manifest that declares `permissions` must set `min_gety_app_version` to `0.7.0` or later, the first Gety release with the sandbox: every older Gety then reports that the connector needs a newer Gety instead of running it without a sandbox or failing on an unknown field.
 - `capabilities` is a required non-empty array declaring which host integration points the connector participates in. A polling/indexing data source must declare `["data-source"]` (currently the only supported value); unknown values are rejected. Capabilities are host features, not sandbox permissions.
 - `entry` and `icon` must be relative paths inside the connector root. `icon` is optional (a PNG or SVG in the connector root) and is shown in Gety's connector list and install dialog.
 - `schedule` declares the update strategy. Supported shapes:
@@ -511,7 +511,7 @@ The package's `package.json` carries the complete manifest in a `gety` object:
     "id": "acme-linear",
     "name": "Acme Linear",
     "version": "1.2.0",
-    "min_gety_app_version": "0.6.6",
+    "min_gety_app_version": "0.7.0",
     "entry": "dist/main.js",
     "icon": "icon.svg",
     "capabilities": ["data-source"],
@@ -544,7 +544,7 @@ Only npm installs have version management. GitHub and local-folder installs get 
 - The update it offers is the highest version that is newer than the installed one, not a pre-release, not deprecated, and runs on the user's Gety (its `min_gety_app_version` is not newer than the app). The `latest` dist-tag plays no part. The row's **More actions** button then shows a dot and the tooltip `Update <version> available`.
 - Users can switch to any published version, newer or older, in **More actions → Manage versions** (**Switch to this version**) or with `gety connector update <id> [--version <version>]`. The list labels versions `Pre-release`, `Deprecated`, or `Needs Gety <version>`; pre-releases and deprecated versions can still be chosen explicitly, versions that need a newer Gety cannot.
 - Release notes: Gety shows the section of the package's root `CHANGELOG.md` for the selected version, split by version headings (`## 1.2.0`, `## v1.2.0`, and `## [1.2.0] - 2026-07-14` all work; use one heading level for every version). A section ends at the next heading of the same or a higher level; a non-version heading such as `## Unreleased` is not shown, nor is its content, and a `---` line after a blank line counts as such a heading. An upgrade reads the notes from the new version's package, anything else from the installed copy, so keep the sections of older versions. changesets writes this format. Only the first 1 MiB is shown.
-- `sync_version` (manifest, whole number, 1 when absent) is the format version of what the connector has synced: its state, its document ids, and the content of its documents. Bump it in a release that cannot continue from what an older release synced (the state changes shape, document ids change); upgrading to it then deletes the connector's documents, clears its state, and syncs from scratch. Changing `schema.extra_gety_indexed_fields` does the same without a bump, and every downgrade always does it. A manifest that sets `sync_version` needs `min_gety_app_version` `0.6.6` or later, like `permissions`.
+- `sync_version` (manifest, whole number, 1 when absent) is the format version of what the connector has synced: its state, its document ids, and the content of its documents. Bump it in a release that cannot continue from what an older release synced (the state changes shape, document ids change); upgrading to it then deletes the connector's documents, clears its state, and syncs from scratch. Changing `schema.extra_gety_indexed_fields` does the same without a bump, and every downgrade always does it. A manifest that sets `sync_version` needs `min_gety_app_version` `0.7.0` or later, like `permissions`.
 - What carries over: `this.dataDir` and `localStorage` are kept across versions, and the state is cleared only when the switch resyncs. Settings carry over field by field: a field that keeps its `id` and type keeps the user's value (secrets included); a field whose type changes is reset to its new default, a removed field is dropped, and a new field starts at its default. When a required field ends up empty or a value is not among the new options, the user fills it in before switching. A switch asks the user to review only the permissions the new version adds.
 - Withdraw a broken version with `npm deprecate <package>@<version> "<message>"`: a deprecated version is never offered as an update; users still see it, marked as deprecated with your message, and can choose it explicitly. Pointing `latest` back at an older version does not withdraw a newer one.
 - Test an upgrade as users get it: install the previous published version (`gety connector install --npm <package>@<old> --yes`), let it sync, then run `gety connector update <id> --version <new> --dry-run` and check what it reports (resync, settings to fill in, new permissions) before switching.
